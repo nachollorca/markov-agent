@@ -1,0 +1,10 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: 060b546
+_src_path: gh:nachollorca/mold
+author_email: nllorca@proton.me
+author_name: Nacho Llorca
+license: MIT
+project_description: A coding agent following SKILL.state paper principles.
+project_name: staty
+project_slug: staty
+python_version: '3.13'
