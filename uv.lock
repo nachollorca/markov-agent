@@ -338,16 +338,16 @@ wheels = [
 
 [[package]]
 name = "lmdk"
-version = "2.10.3"
+version = "2.10.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "jinja2" },
     { name = "pydantic" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/31/52/f33cb1b0af8c9490d1c6f20e0ea3a55484dc10de9ee93a1fc08e03c4a207/lmdk-2.10.3.tar.gz", hash = "sha256:3401372c2070f2c02c109d0630a4f4a20d5e2a8d2fa4ae472c5342f571e27d55", size = 32750, upload-time = "2026-08-31T11:52:30.31Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/98/37/f4d0f770866936d2755811753d2ec1c105b561ec26296da29e823ce83bae/lmdk-2.10.4.tar.gz", hash = "sha256:7700a91498b2f671013dbdbfb305357c9130386addbbc68a7110a3cc43c8a94d", size = 33056, upload-time = "2026-09-03T11:57:52.781Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/4a/e358aec2c8ffea555314654436ca94cc7ed0a9fd484a80621fc442e728c5/lmdk-2.10.3-py3-none-any.whl", hash = "sha256:0e325c5ed17ffbcee16ec78b2bff1f28f656f6a6ae5c3a5b741a0cb2d33fc9cf", size = 43614, upload-time = "2026-08-31T11:52:29.355Z" },
+    { url = "https://files.pythonhosted.org/packages/d3/31/53ae27030cf5496b9fd56ce5910f47e2c348173b1437dded0a07163e1cc5/lmdk-2.10.4-py3-none-any.whl", hash = "sha256:188d78637f5284e95b80105a792ce02b0e289b3b51063ef2a8161beb10e731dc", size = 43920, upload-time = "2026-09-03T11:57:51.735Z" },
 ]
 
 [[package]]

@@ -16,7 +16,7 @@ Tips and tricks:
 - After editing, verify by running the change before declaring the task done.
 - Minimal diffs: sed / python one-liners / patches; never rewrite a whole file to change one line.
 - Never re-run a command whose output is already in `facts`.
-- Check `failed_approaches` before retrying; append there when a command doesn't do what is expected.
+- Check `failed_approaches` before retrying; append there when a command doesn't do what expected.
 """
 
 
@@ -29,18 +29,27 @@ class CodingAgentState(BaseModel):
         description="Absolute path of the project directory. The shell does not persist `cd`: "
         "every command must start with `cd {working_dir} && ...` or use absolute paths.",
     )
-    plan: list[str] | None = Field(
-        default=None, description="Remaining steps, next first. Rewrite whenever the plan changes."
+    plan: str | None = Field(
+        default=None,
+        description="Remaining steps, next first. A markdown task list: one `- [ ]` item per step, "
+        "`- [X]` when done.",
     )
-    facts: list[str] | None = Field(
+    facts: str | None = Field(
         default=None,
         description="Everything learned from command output that you will need later: "
-        "file paths, error messages, line numbers, output values.",
+        "file paths, error messages, line numbers, output values. As a markdown list. "
+        "To add a fact, repeat the existing list and append the new line.",
     )
-    failed_approaches: list[str] | None = Field(
-        default=None, description="Commands or fixes that did not work, and why. Never retry these."
+    failed_approaches: str | None = Field(
+        default=None,
+        description="Commands or fixes that did not work, and why. Never retry these. "
+        "A markdown list, one entry per line. To add one, repeat the list and append.",
     )
-    edits: list[str] | None = Field(default=None, description="Files changed so far, and why.")
+    edits: str | None = Field(
+        default=None,
+        description="Files changed so far, and why. A markdown list, one entry per line. "
+        "To add one, repeat the list and append.",
+    )
     verification: str | None = Field(
         default=None,
         description="Output of the run that proves the task is done: actual evidence, not a claim.",
