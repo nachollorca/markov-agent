@@ -5,10 +5,13 @@ At each step t, the model sees only three things:
     2. Σₜ: The current state in the given per-domain structure
     3. Oₜ: The latest observation
 
-It returns a state patch (update) and aptionally an action.
+It returns a state update (patch) and optionally an action.
 
 Whole point of the paper: prompt stays O(1) with just the necessary info,
 instead of growing with the conversation.
+
+Deviation from the paper: the merge operator drops null-deletion semantics,
+see `update_state`.
 """
 
 import json
@@ -33,12 +36,14 @@ Latest observation:
 {observation}
 ```
 
-Update the state
-(rewrite fields that change,
-omit fields that stay the same,
-delete fields by setting them to null),
-and propose the next action
-(set it to null when the task is done).
+Update the state and propose the next action.
+
+How to update the state:
+- Setting a field replaces its whole current value. To add to a field, rewrite it
+  in full: its current content first, then what you are adding.
+- Leaving a field null keeps its current value. Null never erases anything, so
+  fill in only the fields that actually change this step.
+- Set the action to null when, and only when, the task is done.
 
 Anything you will need later must be recorded in the state:
 the current observation will never be shown again.\
@@ -46,20 +51,21 @@ the current observation will never be shown again.\
 
 
 def yolo_bash(command: str) -> str:
-    """Run a bash command and return the stdout and stderr."""
+    """Run a bash command and return it alongside its exit code, stdout and stderr."""
     # ! Probably needs a white/black- list and / or a sandbox
     proc = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=BASH_TIMEOUT)
-    output = (proc.stdout + proc.stderr).strip() or f"(exit {proc.returncode}, no output)"
-    return output[:MAX_BASH_OUTPUT]
+    output = (proc.stdout + proc.stderr).strip() or "(no output)"
+    # The model never sees its own previous action, so the observation carries it.
+    return f"$ {command}\n(exit {proc.returncode})\n{output[:MAX_BASH_OUTPUT]}"
 
 
 def update_state(state: dict, patch: dict) -> dict:
-    """Recursively merge *patch* into *state*; a null value deletes the key."""
+    """Recursively merge *patch* into *state*; a null value leaves the key untouched."""
     merged = dict(state)
     for key, value in patch.items():
         if value is None:
-            merged.pop(key, None)
-        elif isinstance(value, dict) and isinstance(merged.get(key), dict):
+            continue
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
             merged[key] = update_state(merged[key], value)
         else:
             merged[key] = value
@@ -101,7 +107,7 @@ def run(
             thinking_effort="high",
         )
         assert response.output is not None
-        step = response.output.model_dump(exclude_unset=True)  # unset fields = unchanged
+        step = response.output.model_dump()  # null fields = unchanged, see `update_state`
         state = update_state(state, step["state"])
         if step["action"] is None:  # no action left to take = done
             break

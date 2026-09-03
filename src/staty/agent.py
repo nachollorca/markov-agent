@@ -37,16 +37,18 @@ class CodingAgentState(BaseModel):
     facts: str | None = Field(
         default=None,
         description="Everything learned from command output that you will need later: "
-        "file paths, error messages, line numbers, output values. As a markdown list.",
+        "file paths, error messages, line numbers, output values. As a markdown list. "
+        "To add a fact, repeat the existing list and append the new line.",
     )
     failed_approaches: str | None = Field(
         default=None,
         description="Commands or fixes that did not work, and why. Never retry these. "
-        "A markdown list, one entry per line.",
+        "A markdown list, one entry per line. To add one, repeat the list and append.",
     )
     edits: str | None = Field(
         default=None,
-        description="Files changed so far, and why. A markdown list, one entry per line.",
+        description="Files changed so far, and why. A markdown list, one entry per line. "
+        "To add one, repeat the list and append.",
     )
     verification: str | None = Field(
         default=None,
