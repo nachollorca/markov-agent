@@ -7,7 +7,7 @@ At each step t, the model sees only three things:
 
 It returns a state patch (update) and aptionally an action.
 
-Whole point of the paper: prompt stays O(1) with just the necessary info
+Whole point of the paper: prompt stays O(1) with just the necessary info,
 instead of growing with the conversation.
 """
 
