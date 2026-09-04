@@ -23,40 +23,29 @@ Tips and tricks:
 class CodingAgentState(BaseModel):
     """State of the coding agent."""
 
-    task: str | None = Field(default=None, description="The user's goal, restated in your words.")
-    working_dir: str | None = Field(
-        default=None,
+    task: str = Field(description="The user's goal, restated in your words.")
+    working_dir: str = Field(
         description="Absolute path of the project directory. The shell does not persist `cd`: "
         "every command must start with `cd {working_dir} && ...` or use absolute paths.",
     )
-    plan: str | None = Field(
-        default=None,
+    plan: str = Field(
         description="Remaining steps, next first. A markdown task list: one `- [ ]` item per step, "
         "`- [X]` when done.",
     )
-    facts: str | None = Field(
-        default=None,
+    facts: str = Field(
         description="Everything learned from command output that you will need later: "
-        "file paths, error messages, line numbers, output values. As a markdown list. "
-        "To add a fact, repeat the existing list and append the new line.",
+        "file paths, error messages, line numbers, output values. As a markdown list."
     )
-    failed_approaches: str | None = Field(
-        default=None,
-        description="Commands or fixes that did not work, and why. Never retry these. "
-        "A markdown list, one entry per line. To add one, repeat the list and append.",
+    failed_approaches: str = Field(
+        description="Commands or fixes that did not work, and why. Never retry these."
     )
-    edits: str | None = Field(
-        default=None,
-        description="Files changed so far, and why. A markdown list, one entry per line. "
-        "To add one, repeat the list and append.",
+    edits: str = Field(
+        description="Files changed so far, and why. A markdown list, one entry per line."
     )
-    verification: str | None = Field(
-        default=None,
+    verification: str = Field(
         description="Output of the run that proves the task is done: actual evidence, not a claim.",
     )
-    result: str | None = Field(
-        default=None, description="One-paragraph summary for the user, written when finishing."
-    )
+    result: str = Field(description="One-paragraph summary for the user, written when finishing.")
 
 
 if __name__ == "__main__":
