@@ -83,7 +83,7 @@ if __name__ == "__main__":
             model=model,
             instructions=INSTRUCTIONS,
             state_schema=CodingAgentState,
-            observation=request,
+            request=request,
             state={"working_dir": str(working_dir)},
         )
     print(json.dumps(final_state, indent=2))
