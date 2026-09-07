@@ -29,12 +29,12 @@ _Made with [`mold`](https://github.com/nachollorca/mold) template_
 ## References
 ```
 @misc{badhe2026skillstatescalablelonghorizonagent,
-      title={SKILL.state: Scalable Long-Horizon Agent Skills}, 
+      title={SKILL.state: Scalable Long-Horizon Agent Skills},
       author={Sanket Badhe and Priyanka Tiwari and Jonghyun Chung},
       year={2026},
       eprint={2608.26263},
       archivePrefix={arXiv},
       primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2608.26263}, 
+      url={https://arxiv.org/abs/2608.26263},
 }
 ```

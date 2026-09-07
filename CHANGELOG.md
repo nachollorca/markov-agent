@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v1.2.0 (2026-09-07)
+
+### Chores
+
+- Move logfire to dev deps
+  ([`87a6a85`](https://github.com/nachollorca/markov-agent/commit/87a6a85f22e990ee868159e4b207943c4f7e5d20))
+
+- Rename project to markov-agent
+  ([`ba33845`](https://github.com/nachollorca/markov-agent/commit/ba33845871fd0b5dcafca37e98a09d0dd7574924))
+
+### Documentation
+
+- **readme**: Explain why markov
+  ([`ebe1de2`](https://github.com/nachollorca/markov-agent/commit/ebe1de2add155578f2acc6f536b73bbb54c3b324))
+
+- **readme**: Make the markov interpretation shorter
+  ([`c830869`](https://github.com/nachollorca/markov-agent/commit/c830869c3902ed50482e7fc71673e47701b37b80))
+
+### Features
+
+- **prompt**: Make functioning instructions clearer
+  ([`d06aa87`](https://github.com/nachollorca/markov-agent/commit/d06aa87ae6e16bf8618c6d061d7fe08c6e123639))
+
+
 ## v1.1.0 (2026-09-04)
 
 ### Features
