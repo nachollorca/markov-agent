@@ -1,17 +1,19 @@
-# staty
+# markov-agent
 
-A coding agent following SKILL.state paper principles.
+A coding agent following [SKILL.state](docs/paper.md) paper principles.
+
+The name comes from the paper's core idea: agent state is modeled as a Markov process, where the next state depends only on the current state and the action taken — not on the full history. The agent's context (state) is updated via an explicit `transition(state, action) -> new_state` function, making state evolution predictable and testable rather than an implicit side effect of the conversation.
 
 ## Installation
 
 ```bash
-uv add staty
+uv add markov-agent
 ```
 
 ## Usage
 
 ```python
-import staty
+import markov_agent
 ```
 
 ## Development

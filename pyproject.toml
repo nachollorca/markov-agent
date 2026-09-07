@@ -1,6 +1,6 @@
 # Project metadata ------------------------------------------------------------
 [project]
-name = "staty"
+name = "markov-agent"
 version = "1.1.0"
 description = "A coding agent following SKILL.state paper principles."
 requires-python = ">=3.13"
