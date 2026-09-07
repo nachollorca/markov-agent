@@ -9,12 +9,12 @@ readme = "README.md"
 authors = [{ name = "Nacho Llorca", email = "nllorca@proton.me" }]
 dependencies = [
     "lmdk>=2.10.3",
-    "logfire>=4.41.0",
 ]
 
 # Dev / optional dependencies -------------------------------------------------
 [dependency-groups]
 dev = [
+    "logfire",
     "complexipy",
     "pytest-cov",
     "ruff",
