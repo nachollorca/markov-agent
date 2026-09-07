@@ -24,7 +24,17 @@ BASH_TIMEOUT = 100  # seconds to wait for the bash
 MAX_BASH_OUTPUT = 100_000  # maximum chars of observation shown to the model
 
 PROMPT = """\
+You are an agent running in a loop inside a Unix shell.
+At each step you see only:
+- The instructions below
+- The original request
+- The current state
+- The latest observation, produced your previously requested action
+
+Instructions:
+```
 {instructions}
+```
 
 Original request:
 ```
@@ -43,15 +53,23 @@ Latest observation:
 
 Update the state, and propose the next action if necessary.
 
-How to update the state:
-- Setting a field replaces its whole current value. To add to a field, rewrite it
-  in full: its current content first, then what you are adding.
-- Set a field to "unchanged" to keep its current value.
-- Set a field to "unset" to clear it (uninitialized fields start as "unset").
-- Set the action to null when, and only when, the task is done.
+How to work:
+- One action per step. Don't cram the whole task into one action: the loop shows later its result.
+- The action is your only way to affect or learn about the world; the observation is its result.
+- The state is your only memory. Anything you will need later must be in it after this step:
+    the current observation will never be shown again.
+- The observation wins over the state: if they disagree, the world changed or the state was wrong.
+- Never redo work whose result is already in the state.
+- Record failures, not just successes, so you don't retry what already failed.
+- Every step must move the task forward: learn a missing fact, make a change, or verify one.
+- Finish only when the state itself shows the request is satisfied and verified.
 
-Anything you will need later must be recorded in the state:
-the current observation will never be shown again.\
+How to update the state:
+- Update: setting a field replaces its whole current value. To add to a field, rewrite it in full:
+    its current content first, then what you are adding.
+- Keep: set a field to "unchanged" to keep its current value.
+- Delete: set a field to "unset" to clear it (uninitialized fields start as "unset").
+- Finish: set the action to null when, and only when, the task is done.\
 """
 
 

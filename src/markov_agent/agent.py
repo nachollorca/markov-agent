@@ -8,15 +8,12 @@ from pydantic import BaseModel, Field
 from .skill_state import run
 
 INSTRUCTIONS = """\
-You are a coding agent working in a Linux shell.
+You are a coding agent: you edit files in a project and prove the change works.
 
-Tips and tricks:
-- Look before you change: read the relevant files (sed -n, grep, ls) before editing.
-- One bash command per step; prefer precise commands (grep, sed) over dumping whole files.
-- After editing, verify by running the change before declaring the task done.
+- Look before you change: read the relevant code (ls, grep, sed -n) before editing it.
+- Read narrowly: grep / sed -n over whole files, the output is the observation you pay for.
 - Minimal diffs: sed / python one-liners / patches; never rewrite a whole file to change one line.
-- Never re-run a command whose output is already in `facts`.
-- Check `failed_approaches` before retrying; append there when a command doesn't do what expected.
+- Verified means executed: run the tests or the code itself and keep its output as proof.
 """
 
 
@@ -25,25 +22,24 @@ class CodingAgentState(BaseModel):
 
     task: str = Field(description="The user's goal, restated in your words.")
     working_dir: str = Field(
-        description="Absolute path of the project directory. The shell does not persist `cd`: "
-        "every command must start with `cd {working_dir} && ...` or use absolute paths.",
+        description="Absolute path of the project directory. "
+        "Each command runs in a fresh shell, so `cd` never persists: "
+        "use absolute paths, or prefix the action commands with `cd ` and this field's value."
     )
     plan: str = Field(
-        description="Remaining steps, next first. A markdown task list: one `- [ ]` item per step, "
-        "`- [X]` when done.",
+        description="Remaining steps, next first. "
+        "A markdown task list: one `- [ ]` item per step, `- [X]` when done.",
     )
     facts: str = Field(
         description="Everything learned from command output that you will need later: "
         "file paths, error messages, line numbers, output values. As a markdown list."
     )
-    failed_approaches: str = Field(
-        description="Commands or fixes that did not work, and why. Never retry these."
-    )
+    failed_approaches: str = Field(description="Commands or fixes that did not work, and why.")
     edits: str = Field(
         description="Files changed so far, and why. A markdown list, one entry per line."
     )
     verification: str = Field(
-        description="Output of the run that proves the task is done: actual evidence, not a claim.",
+        description="Output of the run that proves the task is done.",
     )
     result: str = Field(description="One-paragraph summary for the user, written when finishing.")
 
@@ -51,7 +47,15 @@ class CodingAgentState(BaseModel):
 if __name__ == "__main__":
     import argparse
 
-    import logfire
+    if os.getenv("LMDK_TELEMETRY"):
+        import logfire
+
+        logfire.configure(
+            token=os.environ["LOGFIRE_TOKEN"],
+            service_name="skill-state-coding-agent",
+            scrubbing=False,
+            send_to_logfire=True,
+        )
 
     parser = argparse.ArgumentParser(description="Run the coding agent.")
     parser.add_argument("request", help="The user's request.")
@@ -61,12 +65,6 @@ if __name__ == "__main__":
 
     request, model, working_dir = args.request, args.model, args.working_dir
 
-    logfire.configure(
-        token=os.environ["LOGFIRE_TOKEN"],
-        service_name="skill-state-coding-agent",
-        scrubbing=False,
-        send_to_logfire=True,
-    )
     with logfire.span("skill_state.run {task}", task=request):
         final_state = run(
             model=model,
