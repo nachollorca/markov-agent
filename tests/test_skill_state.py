@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel
 
-from staty.skill_state import (
+from markov_agent.skill_state import (
     MAX_BASH_OUTPUT,
     derive_patch_schema,
     derive_schema,
@@ -82,7 +82,7 @@ def test_dict_patch_replaces_scalar_value():
 
 
 def test_run_executes_actions_until_done(monkeypatch):
-    import staty.skill_state as skill_state
+    import markov_agent.skill_state as skill_state
 
     class FakeState(BaseModel):
         n: int

@@ -1,17 +1,17 @@
-# staty
+# markov-agent
 
 A coding agent following SKILL.state paper principles.
 
 ## Installation
 
 ```bash
-uv add staty
+uv add markov-agent
 ```
 
 ## Usage
 
 ```python
-import staty
+import markov_agent
 ```
 
 ## Development
