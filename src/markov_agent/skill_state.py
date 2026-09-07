@@ -29,7 +29,7 @@ At each step you see only:
 - The instructions below
 - The original request
 - The current state
-- The latest observation, produced your previously requested action
+- The latest observation, produced by your previously requested action
 
 Instructions:
 ```
@@ -117,6 +117,16 @@ def derive_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
     return create_model("Step", state=(patch_schema, ...), action=(str | None, ...))
 
 
+class StepEvent(BaseModel):
+    """Representation of model state, action and observation at time t."""
+
+    t: int
+    state: dict
+    patch: dict
+    action: str | None
+    observation: str | None
+
+
 def run(
     model: str,
     instructions: str,
@@ -125,7 +135,7 @@ def run(
     state: dict | None = None,
     max_steps: int = 50,
 ) -> dict:
-    """Execute a skill until the model proposes no action (done) or *max_steps* is hit.
+    """Execute the harness until the model proposes no action (done) or *max_steps* is hit.
 
     Args:
         model: Provider-prefixed model identifier, as in ``lmdk.complete``.
