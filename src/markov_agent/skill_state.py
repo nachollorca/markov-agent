@@ -1,8 +1,6 @@
 """SKILL.state (arXiv:2608.26263) core implementation.
 
-Whole point of the paper: prompt stays O(1) with just the necessary info,
-instead of growing with the conversation.
-
+Whole point of the paper: prompt stays O(1) instead of growing with the conversation.
 At each step t, the model sees only three things:
     1. P: The immutable skill spec
     2. Σₜ: The current state in the given per-domain structure
@@ -17,60 +15,11 @@ import json
 import subprocess
 from typing import Any, Literal
 
-from lmdk import complete
+from lmdk import complete, render_template
 from pydantic import BaseModel, Field, create_model
 
 BASH_TIMEOUT = 100  # seconds to wait for the bash
 MAX_BASH_OUTPUT = 100_000  # maximum chars of observation shown to the model
-
-PROMPT = """\
-You are an agent running in a loop inside a Unix shell.
-At each step you see only:
-- The instructions below
-- The original request
-- The current state
-- The latest observation, produced by your previously requested action
-
-Instructions:
-```
-{instructions}
-```
-
-Original request:
-```
-{request}
-```
-
-Current execution state (step {t}):
-```json
-{state}
-```
-
-Latest observation:
-```
-{observation}
-```
-
-Update the state, and propose the next action if necessary.
-
-How to work:
-- One action per step. Don't cram the whole task into one action: the loop shows later its result.
-- The action is your only way to affect or learn about the world; the observation is its result.
-- The state is your only memory. Anything you will need later must be in it after this step:
-    the current observation will never be shown again.
-- The observation wins over the state: if they disagree, the world changed or the state was wrong.
-- Never redo work whose result is already in the state.
-- Record failures, not just successes, so you don't retry what already failed.
-- Every step must move the task forward: learn a missing fact, make a change, or verify one.
-- Finish only when the state itself shows the request is satisfied and verified.
-
-How to update the state:
-- Update: setting a field replaces its whole current value. To add to a field, rewrite it in full:
-    its current content first, then what you are adding.
-- Keep: set a field to "unchanged" to keep its current value.
-- Delete: set a field to "unset" to clear it (uninitialized fields start as "unset").
-- Finish: set the action to null when, and only when, the task is done.\
-"""
 
 
 def yolo_bash(command: str) -> str:
@@ -79,11 +28,15 @@ def yolo_bash(command: str) -> str:
     proc = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=BASH_TIMEOUT)
     output = (proc.stdout + proc.stderr).strip() or "(no output)"
     # The model never sees its own previous action, so the observation carries it
-    return f"$ {command}\n(exit {proc.returncode})\n{output[:MAX_BASH_OUTPUT]}"
+    # Could also be `{{ ACTION }}` variable in the `prompt_template.jinja`
+    truncated = ""
+    if len(output) > MAX_BASH_OUTPUT:
+        truncated = f"\n[The output has been truncated at the maximum {MAX_BASH_OUTPUT} characters]"
+    return f"$ {command}\n(exit {proc.returncode})\n{output[:MAX_BASH_OUTPUT]}{truncated}"
 
 
 def update_state(state: dict, patch: dict) -> dict:
-    """Recursively merge *patch* into *state*."""
+    """Recursively merge *patch* (the state change made by the agent) into *state*."""
     merged = dict(state)
     for key, value in patch.items():
         if value == "unchanged":
@@ -112,7 +65,7 @@ def derive_patch_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
 
 
 def derive_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
-    """Derive the step schema wrapping the state patch and action."""
+    """Adds the ``action`` field to the patch schema."""
     patch_schema = derive_patch_schema(state_schema)
     return create_model("Step", state=(patch_schema, ...), action=(str | None, ...))
 
@@ -158,15 +111,17 @@ def run(
     observation = "none"
     schema = derive_schema(state_schema)
     for t in range(max_steps):
+        prompt = render_template(
+            path="src/markov_agent/prompt_template.jinja",
+            instructions=instructions,
+            request=request,
+            state=json.dumps(state, separators=(",", ":")),
+            observation=observation,
+            t=t,
+        )
         response = complete(
             model=model,
-            prompt=PROMPT.format(
-                instructions=instructions,
-                request=request,
-                state=json.dumps(state, separators=(",", ":")),
-                observation=observation,
-                t=t,
-            ),
+            prompt=prompt,
             output_schema=schema,
             thinking_effort="high",
         )
