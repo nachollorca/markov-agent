@@ -6,6 +6,7 @@ from markov_agent.skill_state import (
     MAX_BASH_OUTPUT,
     derive_patch_schema,
     derive_schema,
+    initial_state,
     update_state,
     yolo_bash,
 )
@@ -42,8 +43,13 @@ def test_observation_carries_the_command_and_exit_code():
 
 
 def test_output_is_truncated_to_max_chars():
-    out = yolo_bash(f"python3 -c 'print(\"$\" * {MAX_BASH_OUTPUT + 10})'")
-    assert out.endswith("\n" + "$" * MAX_BASH_OUTPUT)
+    command = f"python3 -c 'print(\"$\" * {MAX_BASH_OUTPUT + 10})'"
+    out = yolo_bash(command)
+    assert out == (
+        f"$ {command}\n(exit 0)\n"
+        + "$" * MAX_BASH_OUTPUT
+        + f"\n[The output has been truncated at the maximum {MAX_BASH_OUTPUT} characters]"
+    )
 
 
 def test_patch_cannot_mutate_input_state():
@@ -64,12 +70,21 @@ def test_derive_patch_schema_adds_unchanged_and_unset():
         assert ["unchanged", "unset"] in enum_types
 
 
+def test_initial_state_seeds_unset_and_defaults():
+    class S(BaseModel):
+        required: int
+        optional: str = "d"
+
+    assert initial_state(S) == {"required": "unset", "optional": "d"}
+    assert initial_state(S, {"required": 1}) == {"required": 1, "optional": "d"}
+
+
 def test_derive_schema_wraps_patch_and_action():
     class S(BaseModel):
         x: int
 
     step_schema = derive_schema(S)
-    assert "state" in step_schema.model_fields
+    assert "patch" in step_schema.model_fields
     assert "action" in step_schema.model_fields
 
 
@@ -89,7 +104,7 @@ def test_run_executes_actions_until_done(monkeypatch):
 
     @dataclass(frozen=True)
     class FakeStep(BaseModel):
-        state: dict
+        patch: dict
         action: str | None
 
     @dataclass(frozen=True)
@@ -97,7 +112,7 @@ def test_run_executes_actions_until_done(monkeypatch):
         output: FakeStep
 
     steps = iter(
-        [FakeStep(state={"n": 1}, action="echo one"), FakeStep(state={"n": 2}, action=None)]
+        [FakeStep(patch={"n": 1}, action="echo one"), FakeStep(patch={"n": 2}, action=None)]
     )
     calls = []
 
@@ -106,7 +121,11 @@ def test_run_executes_actions_until_done(monkeypatch):
         return FakeResponse(next(steps))
 
     monkeypatch.setattr(skill_state, "complete", fake_complete)
-    assert skill_state.run("m", "i", "r", FakeState) == {"n": 2}
+    events = list(skill_state.run("m", "i", "r", FakeState))
+    assert [e.state for e in events] == [{"n": 1}, {"n": 2}]
+    assert events[-1].action is None
+    assert events[0].observation == "none"
+    assert events[1].observation == "$ echo one\n(exit 0)\none"
     assert len(calls) == 2 and "(exit 0)\none" in calls[1] and "step 0" in calls[0]
     # initial state seeded 'n' with 'unset'
     assert '"n":"unset"' in calls[0]
