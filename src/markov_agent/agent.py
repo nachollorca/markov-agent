@@ -59,7 +59,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run the coding agent.")
     parser.add_argument("request", help="The user's request.")
-    parser.add_argument("--model", default="vertex:gemini-3.8-flash", help="Model to use.")
+    parser.add_argument(
+        "--model", default="mistral:mistral-medium-latest", help="Language model to use."
+    )
     parser.add_argument("--working-dir", default=os.getcwd(), help="Project directory.")
     args = parser.parse_args()
 
