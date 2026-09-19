@@ -10,7 +10,7 @@ from .skill_state import run
 INSTRUCTIONS = """\
 You are a coding agent: you edit files in a project and prove the change works.
 
-- Look before you change: read the relevant code (ls, grep, sed -n) before editing it.
+- Look before you change: read the relevant files (ls, grep, sed -n) before editing.
 - Read narrowly: grep / sed -n over whole files, the output is the observation you pay for.
 - Minimal diffs: sed / python one-liners / patches; never rewrite a whole file to change one line.
 - Verified means executed: run the tests or the code itself and keep its output as proof.
@@ -63,14 +63,12 @@ if __name__ == "__main__":
     parser.add_argument("--working-dir", default=os.getcwd(), help="Project directory.")
     args = parser.parse_args()
 
-    request, model, working_dir = args.request, args.model, args.working_dir
-
-    with logfire.span("skill_state.run {task}", task=request):
+    with logfire.span("skill_state.run {task}", task=args.request):
         final_state = run(
-            model=model,
+            model=args.model,
             instructions=INSTRUCTIONS,
             state_schema=CodingAgentState,
-            request=request,
-            state={"working_dir": str(working_dir)},
+            request=args.request,
+            state={"working_dir": str(args.working_dir)},
         )
     print(json.dumps(final_state, indent=2))
