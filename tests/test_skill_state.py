@@ -6,6 +6,7 @@ from markov_agent.skill_state import (
     MAX_BASH_OUTPUT,
     derive_patch_schema,
     derive_schema,
+    initial_state,
     update_state,
     yolo_bash,
 )
@@ -62,6 +63,15 @@ def test_derive_patch_schema_adds_unchanged_and_unset():
     for prop in schema["properties"].values():
         enum_types = [opt.get("enum") for opt in prop.get("anyOf", []) if "enum" in opt]
         assert ["unchanged", "unset"] in enum_types
+
+
+def test_initial_state_seeds_unset_and_defaults():
+    class S(BaseModel):
+        required: int
+        optional: str = "d"
+
+    assert initial_state(S) == {"required": "unset", "optional": "d"}
+    assert initial_state(S, {"required": 1}) == {"required": 1, "optional": "d"}
 
 
 def test_derive_schema_wraps_patch_and_action():

@@ -51,8 +51,7 @@ def update_state(state: dict, patch: dict) -> dict:
 def derive_patch_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
     """Derive from the domain-defined schema a patch schema the model can emit.
 
-    - Adds to each field the possibility to be "unchanged" or "unset"
-    - Forces default value "unset" when not given
+    Adds to each field the possibility to be "unchanged" (default) or "unset".
     """
     fields: dict[str, Any] = {}
     for name, field in state_schema.model_fields.items():
@@ -68,6 +67,15 @@ def derive_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
     """Adds the ``action`` field to the patch schema."""
     patch_schema = derive_patch_schema(state_schema)
     return create_model("Step", state=(patch_schema, ...), action=(str | None, ...))
+
+
+def initial_state(state_schema: type[BaseModel], state: dict | None = None) -> dict:
+    """Seed the state: required fields start as "unset", optional fields at their default."""
+    defaults = {
+        name: ("unset" if field.is_required() else field.get_default(call_default_factory=True))
+        for name, field in state_schema.model_fields.items()
+    }
+    return {**defaults, **(state or {})}
 
 
 class StepEvent(BaseModel):
@@ -101,13 +109,7 @@ def run(
     Returns:
         The final execution state.
     """
-    # Ensure all defaults are set
-    defaults = {
-        name: ("unset" if field.is_required() else field.default)
-        for name, field in state_schema.model_fields.items()
-    }
-    state = {**defaults, **(state or {})}
-
+    state = initial_state(state_schema, state)
     observation = "none"
     schema = derive_schema(state_schema)
     for t in range(max_steps):
