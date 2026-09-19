@@ -13,6 +13,7 @@ It returns:
 
 import json
 import subprocess
+from collections.abc import Iterator
 from typing import Any, Literal
 
 from lmdk import complete, render_template
@@ -66,7 +67,11 @@ def derive_patch_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
 def derive_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
     """Adds the ``action`` field to the patch schema."""
     patch_schema = derive_patch_schema(state_schema)
-    return create_model("Step", state=(patch_schema, ...), action=(str | None, ...))
+    return create_model(
+        f"Step{state_schema.__name__}",
+        patch=(patch_schema, ...),
+        action=(str | None, ...),
+    )
 
 
 def initial_state(state_schema: type[BaseModel], state: dict | None = None) -> dict:
@@ -95,7 +100,7 @@ def run(
     state_schema: type[BaseModel],
     state: dict | None = None,
     max_steps: int = 50,
-) -> dict:
+) -> Iterator[StepEvent]:
     """Execute the harness until the model proposes no action (done) or *max_steps* is hit.
 
     Args:
@@ -106,8 +111,10 @@ def run(
         state: Initial execution state (Σ₀). Empty by default, can be used to start from checkpoint.
         max_steps: Horizon cap, so a looping model cannot burn tokens forever.
 
-    Returns:
-        The final execution state.
+    Yields:
+        One ``StepEvent`` per step, carrying the post-patch state, the patch itself,
+        the action proposed and the observation it was conditioned on. The final
+        event has ``action=None`` and its ``state`` is the final execution state.
     """
     state = initial_state(state_schema, state)
     observation = "none"
@@ -129,8 +136,15 @@ def run(
         )
         assert response.output is not None
         step = response.output.model_dump()
-        state = update_state(state, step["state"])
+        patch = step["patch"]
+        state = update_state(state, patch)
+        yield StepEvent(
+            t=t,
+            state=state,
+            patch=patch,
+            action=step["action"],
+            observation=observation,
+        )
         if step["action"] is None:  # no action left to take = done
             break
         observation = yolo_bash(step["action"])
-    return state

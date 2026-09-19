@@ -66,11 +66,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with logfire.span("skill_state.run {task}", task=args.request):
-        final_state = run(
+        final_state: dict = {}
+        for event in run(
             model=args.model,
             instructions=INSTRUCTIONS,
             state_schema=CodingAgentState,
             request=args.request,
             state={"working_dir": str(args.working_dir)},
-        )
+        ):
+            final_state = event.state
     print(json.dumps(final_state, indent=2))
