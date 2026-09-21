@@ -6,6 +6,14 @@ A coding agent following the principles defined in the [SKILL.state](docs/paper.
 
 Hence, the context given to the agent is modeled similar to a Markov process: the next state depends only on the current one and the (observed result of the) action taken.
 
+## Overview
+
+Although the paper specifies tasks like [...complete...], I wanted to use it for a coding agent and test it in tasks I normally through at [Pi](https://github.com/earendil-works/pi) and see what happens.
+
+The action space is: **bash**. Nothing more and nothing less. While most coding agents have some specially guardrailed tools (`read`, `patch`, etc.), [there is research proving that powerful LMs can do better without](https://arxiv.org/pdf/2609.20804):
+
+> Predefined tools improve performance for models with weaker bash proficiency, whereas bash-capable models can operate effectively with a bash-only interface and achieve substantially lower cost, especially on command-line-centric tasks.
+
 ## Installation
 
 ```bash
