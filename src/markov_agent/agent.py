@@ -1,10 +1,6 @@
 """Domain definition for a small coding agent on top of `skill_state.run`."""
 
-import os
-
 from pydantic import BaseModel, Field
-
-from .skill_state import run
 
 DEFAULT_MODEL = "mistral:mistral-large-4"
 
@@ -42,44 +38,3 @@ class CodingAgentState(BaseModel):
     verification: str = Field(
         description="Output of the run that proves the task is done.",
     )
-
-
-if __name__ == "__main__":
-    import argparse
-
-    if os.getenv("LMDK_TELEMETRY"):
-        import logfire
-
-        logfire.configure(
-            token=os.environ["LOGFIRE_TOKEN"],
-            service_name="skill-state-coding-agent",
-            scrubbing=False,
-            send_to_logfire=True,
-        )
-
-    parser = argparse.ArgumentParser(description="Run the coding agent.")
-    parser.add_argument("request", help="The user's request.")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Language model to use.")
-    parser.add_argument("--working-dir", default=os.getcwd(), help="Project directory.")
-    args = parser.parse_args()
-
-    with logfire.span("skill_state.run {task}", task=args.request):
-        # The request opens the session; each user reply is the next turn's observation.
-        state: dict = {"working_dir": str(args.working_dir)}
-        observation = "none"
-        while observation:
-            reply = None
-            for event in run(
-                model=args.model,
-                instructions=INSTRUCTIONS,
-                state_schema=CodingAgentState,
-                request=args.request,
-                state=state,
-                observation=observation,
-            ):
-                state, reply = event.state, event.reply or reply
-            print(f"\n{reply or '(step limit reached)'}\n[empty line to quit]")
-            try:
-                observation = input("\nYou: ").strip()
-            except EOFError:
-                break
