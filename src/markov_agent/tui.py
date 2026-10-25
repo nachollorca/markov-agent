@@ -45,7 +45,7 @@ class MarkovApp(App):
     """Run a SKILL.state agent one turn at a time, showing each step as state + patch."""
 
     CSS = """
-    #main { height: 1fr; }
+    #main { height: 1fr; margin-top: 1; }
     #state, #step { width: 1fr; }
     #state { border: round $primary; }
     #observation { height: 2fr; border: round $secondary; }
@@ -55,6 +55,7 @@ class MarkovApp(App):
     Collapsible Contents { padding-top: 0; }
     Collapsible.patched { border-left: thick $warning; }
     #timeline { height: auto; max-height: 3; padding: 0 1; }
+    Input { margin-bottom: 1; }
     """
     BINDINGS = [  # noqa: RUF012 (textual's own convention)
         # priority: pageup/pagedown must scrub even while typing in the input
