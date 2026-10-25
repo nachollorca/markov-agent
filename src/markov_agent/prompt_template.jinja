@@ -25,23 +25,19 @@ Latest observation:
 {{observation}}
 ```
 
-Each step you update the state, then do exactly one of:
-- `action`: a shell command to run. Its output becomes the next observation.
-- `reply`: text for the user, asking for feedback or presenting the final result. The user response becomes the next observation.
-
 How to work:
-- One action per step. Don't cram the whole task into one action: the loop will show its result.
-- The action is your only way to affect or learn about the world; the observation is its result.
-- The state is your only memory: the observation is never shown again and your reasoning is  discarded, so anything you will need later must be in the state after this step.
+- One action or one reply per step. Don't cram the whole task into one action: the loop will show its result.
+- Both fields produce the next observation: a command's output, or the user's answer.
+- The state is your only memory: the observation is never shown again and your reasoning is discarded, so anything you will need later must be in the state after this step.
 - The observation wins over the state: if they disagree, the world changed or the state was wrong.
 - Never redo work whose result is already in the state.
 - Record failures, not just successes, so you don't retry what already failed.
-- Every step must move the task forward: learn a missing fact, make a change, or verify one.
-- Reply when the task is done, when you are blocked, or when only the user can decide.
+- Every step must move the task forward: learn a missing fact, make a change, verify one, or ask the user.
 - Only say the task is done when the state itself shows it is satisfied and verified.
 
-How to update the state:
-- Every field of the patch is required: set the ones you change to their new value, everything else to "unchanged".
+How to update the state (the `patch` field only):
+- Every state field appears in the patch, and each is required: set the ones you change to their new value, everything else to "unchanged" or "unset".
 - Update: setting a field replaces its whole current value. To add to a field, rewrite it in full: its current content first, then what you are adding.
 - Keep: set a field to "unchanged" to keep its current value.
 - Delete: set a field to "unset" to clear it (uninitialized fields start as "unset").
+- This applies to the state only: `action` and `reply` are not state fields, never set them to "unchanged".

@@ -22,6 +22,7 @@ from lmdk import complete, render_template
 from pydantic import BaseModel, Field, create_model, model_validator
 
 PROMPT_TEMPLATE = Path(__file__).parent / "prompt_template.jinja"  # ships with the package
+_PATCH_KEYWORDS = ("unchanged", "unset")  # state-patch markers, never a real action or reply
 BASH_TIMEOUT = 100  # seconds to wait for the bash
 MAX_BASH_OUTPUT = 100_000  # maximum chars of observation shown to the model
 
@@ -70,15 +71,25 @@ def derive_patch_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
 class _Step(BaseModel):
     """One step of the loop: mutate the state, then either act or hand the turn back."""
 
-    action: str | None = Field(default=None, description="Shell command to run now.")
-    reply: str | None = Field(
-        default=None, description="What the user reads next: the result, a question, or a blocker. "
+    action: str = Field(
+        default="",
+        description="A shell command to run now. Its output becomes the next observation. "
+        "Fill it when the step is yours to execute, and leave `reply` empty.",
+    )
+    reply: str = Field(
+        default="",
+        description="Text for the user: the result, a question, or a blocker. Their answer "
+        "becomes the next observation. Fill it when only they can decide or when the task is "
+        "done, and leave `action` empty.",
     )
 
     @model_validator(mode="after")
     def _exactly_one(self) -> "_Step":
-        if (self.action is None) == (self.reply is None):
-            raise ValueError("set exactly one of 'action' or 'reply'")
+        # The patch keyword sometimes lands in the idle field instead of ""
+        self.action = "" if self.action in _PATCH_KEYWORDS else self.action
+        self.reply = "" if self.reply in _PATCH_KEYWORDS else self.reply
+        if bool(self.action) == bool(self.reply):
+            raise ValueError("fill exactly one of 'action' or 'reply', leave the other empty")
         return self
 
 
@@ -88,7 +99,10 @@ def derive_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
     return create_model(
         f"Step{state_schema.__name__}",
         __base__=_Step,
-        patch=(patch_schema, ...),
+        patch=(
+            patch_schema,
+            Field(..., description="State changes only, never `action` or `reply`."),
+        ),
     )
 
 
@@ -162,10 +176,10 @@ def run(
             t=t,
             state=state,
             patch=patch,
-            action=step["action"],
-            reply=step["reply"],
+            action=step["action"] or None,
+            reply=step["reply"] or None,
             observation=observation,
         )
-        if step["reply"] is not None:  # turn handed back to the user
+        if step["reply"]:  # turn handed back to the user
             break
         observation = yolo_bash(step["action"])

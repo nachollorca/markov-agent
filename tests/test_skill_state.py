@@ -97,8 +97,10 @@ def test_step_needs_exactly_one_of_action_and_reply():
     step_schema = derive_schema(S)
     assert (
         step_schema.model_validate({"patch": {}, "reply": "which file?"}).model_dump()["action"]
-        is None
+        == ""
     )
+    # the strict provider schema marks both required, so "unchanged" lands in the empty one
+    assert step_schema.model_validate({"patch": {}, "action": "ls", "reply": "unchanged"})
     with pytest.raises(ValidationError, match="exactly one"):
         step_schema.model_validate({"patch": {}, "action": "ls", "reply": "done"})
     with pytest.raises(ValidationError, match="exactly one"):
