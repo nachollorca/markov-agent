@@ -39,15 +39,15 @@ def test_nested_dicts_merge_key_by_key():
 
 
 def test_observation_carries_the_command_and_exit_code():
-    assert yolo_bash("echo hi") == "$ echo hi\n(exit 0)\nhi"
-    assert yolo_bash("exit 3") == "$ exit 3\n(exit 3)\n(no output)"
+    assert yolo_bash("echo hi") == "(exit 0)\nhi"
+    assert yolo_bash("exit 3") == "(exit 3)\n(no output)"
 
 
 def test_output_is_truncated_to_max_chars():
     command = f"python3 -c 'print(\"$\" * {MAX_BASH_OUTPUT + 10})'"
     out = yolo_bash(command)
     assert out == (
-        f"$ {command}\n(exit 0)\n"
+        "(exit 0)\n"
         + "$" * MAX_BASH_OUTPUT
         + f"\n[The output has been truncated at the maximum {MAX_BASH_OUTPUT} characters]"
     )
@@ -142,8 +142,9 @@ def test_run_executes_actions_until_the_agent_replies(monkeypatch):
     assert events[-1].action is None
     assert events[-1].reply == "one"
     assert events[0].observation == "none"
-    assert events[1].observation == "$ echo one\n(exit 0)\none"
+    assert events[1].observation == "(exit 0)\none"
     assert len(calls) == 2 and "(exit 0)\none" in calls[1] and "step 0" in calls[0]
+    assert "echo one" in calls[1] and "Your last action:" not in calls[0]
     # initial state seeded 'n' with 'unset'
     assert '"n":"unset"' in calls[0]
 

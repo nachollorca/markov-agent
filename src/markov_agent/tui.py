@@ -49,6 +49,7 @@ class MarkovApp(App):
     #state, #step { width: 1fr; }
     #state { border: round $primary; }
     #observation { height: 2fr; border: round $secondary; }
+    #cause { color: $accent; text-style: bold; border-bottom: solid $secondary; display: none; }
     #output { height: 1fr; border: round $accent; }
     #output.reply { border: heavy $success; }
     Collapsible { padding-bottom: 0; }
@@ -92,8 +93,10 @@ class MarkovApp(App):
                     with Collapsible(title=name, id=f"field-{name}"):
                         yield Static(id=f"value-{name}", markup=False)
             with Vertical(id="step"):
-                with VerticalScroll(id="observation"):
-                    yield Static(id="obs", markup=False)
+                with Vertical(id="observation"):
+                    yield Static(id="cause", markup=False)  # the action whose output this is
+                    with VerticalScroll():
+                        yield Static(id="obs", markup=False)
                 with VerticalScroll(id="output"):
                     yield Static(id="out", markup=False)
         yield Static(id="timeline")
@@ -172,7 +175,13 @@ class MarkovApp(App):
         _, before, event = self.steps[self.selected]
         t, t1 = str(event.t).translate(_SUB), str(event.t + 1).translate(_SUB)
         self._show_state(before, event.state, f"STATE Σ{t} → Σ{t1}")
-        self.query_one("#observation").border_title = f"OBSERVATION O{t}"
+        # Oₜ is the output of the previous step's action, or the user's message at a turn start
+        cause = self.steps[self.selected - 1][2].action if event.t else None
+        source = f"a{str(event.t - 1).translate(_SUB)}" if cause else "user"
+        self.query_one("#observation").border_title = f"OBSERVATION O{t} ← {source}"
+        cause_box = self.query_one("#cause", Static)
+        cause_box.display = bool(cause)
+        cause_box.update(f"$ {cause}")
         self.query_one("#obs", Static).update(event.observation or "none")
         output = self.query_one("#output")
         output.set_class(bool(event.reply), "reply")

@@ -15,7 +15,8 @@ class State(BaseModel):
 def fake_run(state, observation, **_):
     s1 = {**state, "plan": "- [ ] look"}
     yield StepEvent(t=0, state=s1, patch={}, action="ls", observation=observation)
-    yield StepEvent(t=1, state=s1, patch={}, action=None, reply="done", observation="$ ls")
+    output = "(exit 0)\nfile"
+    yield StepEvent(t=1, state=s1, patch={}, action=None, reply="done", observation=output)
 
 
 def broken_run(**_):
@@ -48,9 +49,13 @@ def test_turn_ends_on_reply_and_scrubbing_shows_the_patch(monkeypatch):
         assert app.request == "do it"
         assert app.query_one("#output").border_title == "REPLY"
         assert app.status == "your turn"
+        assert app.query_one("#observation").border_title == "OBSERVATION O₁ ← a₀"
+        assert app.query_one("#cause").display
         assert not app.query_one(Input).disabled
         await pilot.press("pageup")
         assert app.query_one("#output").border_title == "ACTION a₀"
+        assert app.query_one("#observation").border_title == "OBSERVATION O₀ ← user"
+        assert not app.query_one("#cause").display
         plan = app.query_one("#field-plan", Collapsible)
         assert not plan.collapsed
         assert plan.title == "plan · patched"

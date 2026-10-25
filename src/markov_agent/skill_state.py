@@ -27,16 +27,14 @@ MAX_BASH_OUTPUT = 100_000  # maximum chars of observation shown to the model
 
 
 def yolo_bash(command: str) -> str:
-    """Run a bash command and return it alongside its exit code, stdout and stderr."""
+    """Run a bash command and return its exit code, stdout and stderr."""
     # ! Probably needs a white/black- list and / or a sandbox
     proc = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=BASH_TIMEOUT)
     output = (proc.stdout + proc.stderr).strip() or "(no output)"
-    # The model never sees its own previous action, so the observation carries it
-    # Could also be `{{ ACTION }}` variable in the `prompt_template.jinja`
     truncated = ""
     if len(output) > MAX_BASH_OUTPUT:
         truncated = f"\n[The output has been truncated at the maximum {MAX_BASH_OUTPUT} characters]"
-    return f"$ {command}\n(exit {proc.returncode})\n{output[:MAX_BASH_OUTPUT]}{truncated}"
+    return f"(exit {proc.returncode})\n{output[:MAX_BASH_OUTPUT]}{truncated}"
 
 
 def update_state(state: dict, patch: dict) -> dict:
@@ -149,6 +147,7 @@ def run(
     """
     state = initial_state(state_schema, state)
     schema = derive_schema(state_schema)
+    last_action = None  # the model never sees its own previous action otherwise
     for t in range(max_steps):
         prompt = render_template(
             path=PROMPT_TEMPLATE,
@@ -156,6 +155,7 @@ def run(
             request=request,
             state=json.dumps(state, separators=(",", ":")),
             observation=observation,
+            last_action=last_action,
             t=t,
         )
         response = complete(
@@ -176,4 +176,5 @@ def run(
         )
         if replied:  # turn handed back to the user
             break
-        observation = yolo_bash(step["content"])
+        last_action = step["content"]
+        observation = yolo_bash(last_action)

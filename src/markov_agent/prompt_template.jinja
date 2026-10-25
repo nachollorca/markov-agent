@@ -3,7 +3,8 @@ At each step you see only:
 - The instructions below
 - The request that started this session
 - The current state
-- The latest observation, produced by your previously requested action or by your reply to the user
+- Your last action, if there was one
+- The latest observation, produced by your last action or by your reply to the user
 
 Instructions:
 ```
@@ -19,7 +20,12 @@ Current execution state (step {{t}} of this turn):
 ```json
 {{state}}
 ```
-
+{% if last_action %}
+Your last action:
+```bash
+{{last_action}}
+```
+{% endif %}
 Latest observation:
 ```
 {{observation}}
