@@ -70,9 +70,7 @@ class _Step(BaseModel):
 
     action: str | None = Field(default=None, description="Shell command to run now.")
     reply: str | None = Field(
-        default=None,
-        description="What the user reads next: the result, a question, or a blocker. "
-        "Setting it ends the turn. The next observation will be the user's feedback.",
+        default=None, description="What the user reads next: the result, a question, or a blocker. "
     )
 
     @model_validator(mode="after")
