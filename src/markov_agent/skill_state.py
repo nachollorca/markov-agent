@@ -1,6 +1,6 @@
 """SKILL.state (arXiv:2608.26263) core implementation.
 
-Whole point of the paper: prompt stays O(1) instead of growing with the conversation.
+Prompt stays O(1) instead of growing with the conversation.
 At each step t, the model sees only three things:
     1. P: The immutable skill spec
     2. Σₜ: The current state in the given per-domain structure
@@ -8,7 +8,8 @@ At each step t, the model sees only three things:
 
 It returns:
     - A state update (patch) that produces Σₜ₊₁
-    - An optional action that will produce Oₜ₊₁
+    - And either an action that will produce Oₜ₊₁, or a reply that ends the turn
+      and hands control back to the user
 """
 
 import json
@@ -17,7 +18,7 @@ from collections.abc import Iterator
 from typing import Any, Literal
 
 from lmdk import complete, render_template
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, create_model, model_validator
 
 BASH_TIMEOUT = 100  # seconds to wait for the bash
 MAX_BASH_OUTPUT = 100_000  # maximum chars of observation shown to the model
@@ -64,13 +65,30 @@ def derive_patch_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
     return create_model(f"Patch_{state_schema.__name__}", **fields)
 
 
+class _Step(BaseModel):
+    """One step of the loop: mutate the state, then either act or hand the turn back."""
+
+    action: str | None = Field(default=None, description="Shell command to run now.")
+    reply: str | None = Field(
+        default=None,
+        description="What the user reads next: the result, a question, or a blocker. "
+        "Setting it ends the turn. The next observation will be the user's feedback.",
+    )
+
+    @model_validator(mode="after")
+    def _exactly_one(self) -> "_Step":
+        if (self.action is None) == (self.reply is None):
+            raise ValueError("set exactly one of 'action' or 'reply'")
+        return self
+
+
 def derive_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
-    """Adds the ``action`` field to the patch schema."""
+    """Combine the patch schema with the action/reply fields the model answers with."""
     patch_schema = derive_patch_schema(state_schema)
     return create_model(
         f"Step{state_schema.__name__}",
+        __base__=_Step,
         patch=(patch_schema, ...),
-        action=(str | None, ...),
     )
 
 
@@ -90,7 +108,8 @@ class StepEvent(BaseModel):
     state: dict
     patch: dict
     action: str | None
-    observation: str | None
+    reply: str | None = None
+    observation: str | None = None
 
 
 def run(
@@ -99,25 +118,29 @@ def run(
     request: str,
     state_schema: type[BaseModel],
     state: dict | None = None,
+    observation: str = "none",
     max_steps: int = 50,
 ) -> Iterator[StepEvent]:
-    """Execute the harness until the model proposes no action (done) or *max_steps* is hit.
+    """Execute one turn, until the model replies to the user or *max_steps* is hit.
 
     Args:
         model: Provider-prefixed model identifier, as in ``lmdk.complete``.
         instructions: The immutable procedural specification (P in the paper).
         state_schema: Domain-defined structure of the state (Σ in the paper) for this task.
-        request: The user request, basically observation before any action (O₀).
+        request: The request that started the session. Stable across turns.
         state: Initial execution state (Σ₀). Empty by default, can be used to start from checkpoint.
+        observation: The observation the turn starts from (O₀): the user's reply to the previous
+            turn, or "none" on the first one.
         max_steps: Horizon cap, so a looping model cannot burn tokens forever.
 
     Yields:
         One ``StepEvent`` per step, carrying the post-patch state, the patch itself,
         the action proposed and the observation it was conditioned on. The final
-        event has ``action=None`` and its ``state`` is the final execution state.
+        event carries the ``reply`` handed back to the user, or ``action=None`` when
+        *max_steps* ran out. Call ``run`` again with the final state and the user's
+        next message to continue.
     """
     state = initial_state(state_schema, state)
-    observation = "none"
     schema = derive_schema(state_schema)
     for t in range(max_steps):
         prompt = render_template(
@@ -129,10 +152,7 @@ def run(
             t=t,
         )
         response = complete(
-            model=model,
-            prompt=prompt,
-            output_schema=schema,
-            thinking_effort="high",
+            model=model, prompt=prompt, output_schema=schema, thinking_effort="high"
         )
         assert response.output is not None
         step = response.output.model_dump()
@@ -143,8 +163,9 @@ def run(
             state=state,
             patch=patch,
             action=step["action"],
+            reply=step["reply"],
             observation=observation,
         )
-        if step["action"] is None:  # no action left to take = done
+        if step["reply"] is not None:  # turn handed back to the user
             break
         observation = yolo_bash(step["action"])

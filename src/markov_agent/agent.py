@@ -1,6 +1,5 @@
 """Domain definition for a small coding agent on top of `skill_state.run`."""
 
-import json
 import os
 
 from pydantic import BaseModel, Field
@@ -8,7 +7,7 @@ from pydantic import BaseModel, Field
 from .skill_state import run
 
 INSTRUCTIONS = """\
-You are a coding agent: you edit files in a project and prove the change works.
+You are a coding agent: you search and edit files in a project, and prove the change works.
 
 - Look before you change: read the relevant files (ls, grep, sed -n) before editing.
 - Read narrowly: grep / sed -n over whole files, the output is the observation you pay for.
@@ -41,7 +40,6 @@ class CodingAgentState(BaseModel):
     verification: str = Field(
         description="Output of the run that proves the task is done.",
     )
-    result: str = Field(description="One-paragraph summary for the user, written when finishing.")
 
 
 if __name__ == "__main__":
@@ -59,20 +57,27 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run the coding agent.")
     parser.add_argument("request", help="The user's request.")
-    parser.add_argument(
-        "--model", default="mistral:mistral-medium-latest", help="Language model to use."
-    )
+    parser.add_argument("--model", default="mistral:mistral-large-4", help="Language model to use.")
     parser.add_argument("--working-dir", default=os.getcwd(), help="Project directory.")
     args = parser.parse_args()
 
     with logfire.span("skill_state.run {task}", task=args.request):
-        final_state: dict = {}
-        for event in run(
-            model=args.model,
-            instructions=INSTRUCTIONS,
-            state_schema=CodingAgentState,
-            request=args.request,
-            state={"working_dir": str(args.working_dir)},
-        ):
-            final_state = event.state
-    print(json.dumps(final_state, indent=2))
+        # The request opens the session; each user reply is the next turn's observation.
+        state: dict = {"working_dir": str(args.working_dir)}
+        observation = "none"
+        while observation:
+            reply = None
+            for event in run(
+                model=args.model,
+                instructions=INSTRUCTIONS,
+                state_schema=CodingAgentState,
+                request=args.request,
+                state=state,
+                observation=observation,
+            ):
+                state, reply = event.state, event.reply or reply
+            print(f"\n{reply or '(step limit reached)'}\n[empty line to quit]")
+            try:
+                observation = input("\nYou: ").strip()
+            except EOFError:
+                break
