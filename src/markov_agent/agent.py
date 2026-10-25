@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 from .skill_state import run
 
+DEFAULT_MODEL = "mistral:mistral-large-4"
+
 INSTRUCTIONS = """\
 You are a coding agent: you search and edit files in a project, and prove the change works.
 
@@ -57,7 +59,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run the coding agent.")
     parser.add_argument("request", help="The user's request.")
-    parser.add_argument("--model", default="mistral:mistral-large-4", help="Language model to use.")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help="Language model to use.")
     parser.add_argument("--working-dir", default=os.getcwd(), help="Project directory.")
     args = parser.parse_args()
 

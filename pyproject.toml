@@ -9,7 +9,11 @@ readme = "README.md"
 authors = [{ name = "Nacho Llorca", email = "nllorca@proton.me" }]
 dependencies = [
     "lmdk>=2.10.3",
+    "textual>=6.0.0",
 ]
+
+[project.scripts]
+markov = "markov_agent.tui:main"
 
 # Dev / optional dependencies -------------------------------------------------
 [dependency-groups]

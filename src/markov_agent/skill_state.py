@@ -15,11 +15,13 @@ It returns:
 import json
 import subprocess
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, Literal
 
 from lmdk import complete, render_template
 from pydantic import BaseModel, Field, create_model, model_validator
 
+PROMPT_TEMPLATE = Path(__file__).parent / "prompt_template.jinja"  # ships with the package
 BASH_TIMEOUT = 100  # seconds to wait for the bash
 MAX_BASH_OUTPUT = 100_000  # maximum chars of observation shown to the model
 
@@ -142,7 +144,7 @@ def run(
     schema = derive_schema(state_schema)
     for t in range(max_steps):
         prompt = render_template(
-            path="src/markov_agent/prompt_template.jinja",
+            path=PROMPT_TEMPLATE,
             instructions=instructions,
             request=request,
             state=json.dumps(state, separators=(",", ":")),

@@ -8,7 +8,7 @@ Hence, the context given to the agent is modeled similar to a Markov process: th
 
 ## Overview
 
-Although the paper specifies tasks like inventory management or CTF, I wanted to use it for a coding agent and test it in tasks I normally through at [Pi](https://github.com/earendil-works/pi) and see what happens.
+Although the paper specifies tasks like inventory management or CTF, I wanted to use it for a coding agent and test it in tasks I normally throw at [Pi](https://github.com/earendil-works/pi) and see what happens.
 
 The action space is: **bash**. Nothing more and nothing less. While most coding agents have some specially guardrailed tools (`read`, `patch`, etc.), [there is research proving that powerful LMs can do better without](https://arxiv.org/pdf/2609.20804):
 
@@ -22,9 +22,22 @@ uv add markov-agent
 
 ## Usage
 
-```python
-import markov_agent
+### TUI
+
+```bash
+uv tool install markov-agent
+markov  # --model defaults to mistral:mistral-large-4
 ```
+
+### As a library
+
+[`skill_state.py`](src/markov_agent/skill_state.py) is the whole implementation of the paper. Define your
+state as a pydantic model plus an immutable instruction block, then consume the `StepEvent`s of
+`run()`. [`agent.py`](src/markov_agent/agent.py) is a small coding-agent domain to copy from.
+
+If you only want the core and not the terminal UI (nor its `textual` dependency), copy
+`skill_state.py` and `prompt_template.jinja` into your project: they import nothing else from this
+package, and `lmdk` + `jinja2` are their only requirements.
 
 ## Development
 
