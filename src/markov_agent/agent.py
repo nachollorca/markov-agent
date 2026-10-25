@@ -18,11 +18,6 @@ class CodingAgentState(BaseModel):
     """State of the coding agent."""
 
     task: str = Field(description="The user's goal, restated in your words.")
-    working_dir: str = Field(
-        description="Absolute path of the project directory. "
-        "Each command runs in a fresh shell, so `cd` never persists: "
-        "use absolute paths, or prefix the action commands with `cd ` and this field's value."
-    )
     plan: str = Field(
         description="Remaining steps, next first. "
         "A markdown task list: one `- [ ]` item per step, `- [X]` when done.",

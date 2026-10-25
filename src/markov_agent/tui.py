@@ -234,5 +234,5 @@ def main() -> None:
             console=False,  # console output would draw over the TUI
         )
 
-    state = {"working_dir": os.path.abspath(args.working_dir)}
-    MarkovApp(args.model, INSTRUCTIONS, CodingAgentState, state).run()
+    os.chdir(args.working_dir)  # commands run in a shell that inherits this cwd
+    MarkovApp(args.model, INSTRUCTIONS, CodingAgentState).run()
