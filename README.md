@@ -4,6 +4,8 @@ A coding agent following the principles defined in the [SKILL.state](docs/paper.
 
 > Runtime architecture that replaces append-only conversational history with an explicit, mutable execution state. At each execution step, the model receives only the immutable skill specification, the current structured execution state, and the latest observation. Intermediate reasoning is discarded immediately after **producing a validated state update**, preventing prompt growth with execution history.
 
+![Figure](docs/figure.png)
+
 Hence, the context given to the agent is modeled similar to a Markov process: the next state depends only on the current one and the (observed result of the) action taken.
 
 ## Overview
