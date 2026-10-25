@@ -45,3 +45,6 @@ run file:
     uv run --frozen --env-file .env {{ file }}
 
 # Project specific commands ---------------------------------------------------
+
+tui *args="":
+    uv run --frozen markov {{ args }}

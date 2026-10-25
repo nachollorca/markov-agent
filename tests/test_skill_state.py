@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from pydantic import BaseModel
+import pytest
+from pydantic import BaseModel, ValidationError
 
 from markov_agent.skill_state import (
     MAX_BASH_OUTPUT,
@@ -38,15 +39,15 @@ def test_nested_dicts_merge_key_by_key():
 
 
 def test_observation_carries_the_command_and_exit_code():
-    assert yolo_bash("echo hi") == "$ echo hi\n(exit 0)\nhi"
-    assert yolo_bash("exit 3") == "$ exit 3\n(exit 3)\n(no output)"
+    assert yolo_bash("echo hi") == "(exit 0)\nhi"
+    assert yolo_bash("exit 3") == "(exit 3)\n(no output)"
 
 
 def test_output_is_truncated_to_max_chars():
     command = f"python3 -c 'print(\"$\" * {MAX_BASH_OUTPUT + 10})'"
     out = yolo_bash(command)
     assert out == (
-        f"$ {command}\n(exit 0)\n"
+        "(exit 0)\n"
         + "$" * MAX_BASH_OUTPUT
         + f"\n[The output has been truncated at the maximum {MAX_BASH_OUTPUT} characters]"
     )
@@ -79,13 +80,15 @@ def test_initial_state_seeds_unset_and_defaults():
     assert initial_state(S, {"required": 1}) == {"required": 1, "optional": "d"}
 
 
-def test_derive_schema_wraps_patch_and_action():
+def test_step_schema_puts_the_patch_before_one_action_or_reply():
     class S(BaseModel):
         x: int
 
     step_schema = derive_schema(S)
-    assert "patch" in step_schema.model_fields
-    assert "action" in step_schema.model_fields
+    assert list(step_schema.model_fields) == ["patch", "kind", "content"]
+    assert step_schema.model_validate({"patch": {}, "kind": "reply", "content": "which file?"})
+    with pytest.raises(ValidationError):
+        step_schema.model_validate({"patch": {}, "kind": "unchanged", "content": "ls"})
 
 
 def test_non_dict_patch_replaces_dict_value():
@@ -96,36 +99,65 @@ def test_dict_patch_replaces_scalar_value():
     assert update_state({"a": 1}, {"a": {"b": 2}}) == {"a": {"b": 2}}
 
 
-def test_run_executes_actions_until_done(monkeypatch):
+@dataclass
+class FakeStep:
+    patch: dict
+    action: str | None = None
+    reply: str | None = None
+
+    def model_dump(self):
+        kind = "reply" if self.reply else "action"
+        return {"patch": self.patch, "kind": kind, "content": self.reply or self.action}
+
+
+def _fake_run(monkeypatch, steps):
+    """Wire run() to a canned list of steps; returns the module, state class and prompts."""
     import markov_agent.skill_state as skill_state
 
     class FakeState(BaseModel):
         n: int
 
-    @dataclass(frozen=True)
-    class FakeStep(BaseModel):
-        patch: dict
-        action: str | None
-
-    @dataclass(frozen=True)
-    class FakeResponse:
-        output: FakeStep
-
-    steps = iter(
-        [FakeStep(patch={"n": 1}, action="echo one"), FakeStep(patch={"n": 2}, action=None)]
-    )
+    remaining = iter(steps)
     calls = []
 
     def fake_complete(**kwargs):
         calls.append(kwargs["prompt"])
-        return FakeResponse(next(steps))
+        return type("R", (), {"output": next(remaining)})()
 
     monkeypatch.setattr(skill_state, "complete", fake_complete)
+    return skill_state, FakeState, calls
+
+
+def test_run_executes_actions_until_the_agent_replies(monkeypatch):
+    skill_state, FakeState, calls = _fake_run(
+        monkeypatch,
+        [
+            FakeStep(patch={"n": 1}, action="echo one"),
+            FakeStep(patch={"n": 2}, reply="one"),
+            FakeStep(patch={"n": 3}, action="never runs"),  # the reply ended the turn
+        ],
+    )
     events = list(skill_state.run("m", "i", "r", FakeState))
     assert [e.state for e in events] == [{"n": 1}, {"n": 2}]
     assert events[-1].action is None
+    assert events[-1].reply == "one"
     assert events[0].observation == "none"
-    assert events[1].observation == "$ echo one\n(exit 0)\none"
+    assert events[1].observation == "(exit 0)\none"
     assert len(calls) == 2 and "(exit 0)\none" in calls[1] and "step 0" in calls[0]
+    assert "echo one" in calls[1] and "Your last action:" not in calls[0]
     # initial state seeded 'n' with 'unset'
     assert '"n":"unset"' in calls[0]
+
+
+def test_the_user_reply_resumes_the_turn_as_the_next_observation(monkeypatch):
+    skill_state, FakeState, calls = _fake_run(
+        monkeypatch,
+        [FakeStep(patch={"n": 1}, reply="which file?"), FakeStep(patch={"n": 2}, reply="done")],
+    )
+    first = list(skill_state.run("m", "i", "r", FakeState))
+    second = list(skill_state.run("m", "i", "r", FakeState, first[-1].state, "a.py"))
+    assert first[-1].reply == "which file?"
+    assert [e.state for e in second] == [{"n": 2}]
+    assert second[0].observation == "a.py"  # the user is part of the environment
+    assert "Latest observation:\n```\na.py\n```" in calls[1]
+    assert "Request:\n```\nr\n```" in calls[1]  # the request stays the session's task

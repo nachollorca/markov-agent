@@ -1,6 +1,6 @@
 """SKILL.state (arXiv:2608.26263) core implementation.
 
-Whole point of the paper: prompt stays O(1) instead of growing with the conversation.
+Prompt stays O(1) instead of growing with the conversation.
 At each step t, the model sees only three things:
     1. P: The immutable skill spec
     2. Σₜ: The current state in the given per-domain structure
@@ -8,32 +8,33 @@ At each step t, the model sees only three things:
 
 It returns:
     - A state update (patch) that produces Σₜ₊₁
-    - An optional action that will produce Oₜ₊₁
+    - And either an action that will produce Oₜ₊₁, or a reply that ends the turn
+      and hands control back to the user
 """
 
 import json
 import subprocess
 from collections.abc import Iterator
+from pathlib import Path
 from typing import Any, Literal
 
 from lmdk import complete, render_template
 from pydantic import BaseModel, Field, create_model
 
+PROMPT_TEMPLATE = Path(__file__).parent / "prompt_template.jinja"  # ships with the package
 BASH_TIMEOUT = 100  # seconds to wait for the bash
 MAX_BASH_OUTPUT = 100_000  # maximum chars of observation shown to the model
 
 
 def yolo_bash(command: str) -> str:
-    """Run a bash command and return it alongside its exit code, stdout and stderr."""
+    """Run a bash command and return its exit code, stdout and stderr."""
     # ! Probably needs a white/black- list and / or a sandbox
     proc = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=BASH_TIMEOUT)
     output = (proc.stdout + proc.stderr).strip() or "(no output)"
-    # The model never sees its own previous action, so the observation carries it
-    # Could also be `{{ ACTION }}` variable in the `prompt_template.jinja`
     truncated = ""
     if len(output) > MAX_BASH_OUTPUT:
         truncated = f"\n[The output has been truncated at the maximum {MAX_BASH_OUTPUT} characters]"
-    return f"$ {command}\n(exit {proc.returncode})\n{output[:MAX_BASH_OUTPUT]}{truncated}"
+    return f"(exit {proc.returncode})\n{output[:MAX_BASH_OUTPUT]}{truncated}"
 
 
 def update_state(state: dict, patch: dict) -> dict:
@@ -65,12 +66,34 @@ def derive_patch_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
 
 
 def derive_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
-    """Adds the ``action`` field to the patch schema."""
-    patch_schema = derive_patch_schema(state_schema)
+    """Combine the patch schema with the action-or-reply decision the model answers with.
+
+    The patch comes first so the model records what it learned before deciding what to do.
+    The decision is one `kind` plus one `content`, so strict decoding can only produce exactly
+    one of action or reply (two optional fields got the patch's "unchanged" or both filled).
+    """
     return create_model(
         f"Step{state_schema.__name__}",
-        patch=(patch_schema, ...),
-        action=(str | None, ...),
+        __doc__="One step of the loop: mutate the state, then either act or hand the turn back.",
+        patch=(
+            derive_patch_schema(state_schema),
+            Field(description="State changes only, never `kind` or `content`."),
+        ),
+        kind=(
+            Literal["action", "reply"],
+            Field(
+                description="`action`: run a shell command yourself, when the step is yours to "
+                "execute. `reply`: hand the turn to the user, with the result, a question or a "
+                "blocker, when only they can decide or when the task is done."
+            ),
+        ),
+        content=(
+            str,
+            Field(
+                description="The shell command if `kind` is action, the text for the user if "
+                "reply. Its output, or the user's answer, becomes the next observation."
+            ),
+        ),
     )
 
 
@@ -90,7 +113,8 @@ class StepEvent(BaseModel):
     state: dict
     patch: dict
     action: str | None
-    observation: str | None
+    reply: str | None = None
+    observation: str | None = None
 
 
 def run(
@@ -99,52 +123,58 @@ def run(
     request: str,
     state_schema: type[BaseModel],
     state: dict | None = None,
+    observation: str = "none",
     max_steps: int = 50,
 ) -> Iterator[StepEvent]:
-    """Execute the harness until the model proposes no action (done) or *max_steps* is hit.
+    """Execute one turn, until the model replies to the user or *max_steps* is hit.
 
     Args:
         model: Provider-prefixed model identifier, as in ``lmdk.complete``.
         instructions: The immutable procedural specification (P in the paper).
         state_schema: Domain-defined structure of the state (Σ in the paper) for this task.
-        request: The user request, basically observation before any action (O₀).
+        request: The request that started the session. Stable across turns.
         state: Initial execution state (Σ₀). Empty by default, can be used to start from checkpoint.
+        observation: The observation the turn starts from (O₀): the user's reply to the previous
+            turn, or "none" on the first one.
         max_steps: Horizon cap, so a looping model cannot burn tokens forever.
 
     Yields:
         One ``StepEvent`` per step, carrying the post-patch state, the patch itself,
         the action proposed and the observation it was conditioned on. The final
-        event has ``action=None`` and its ``state`` is the final execution state.
+        event carries the ``reply`` handed back to the user, or ``reply=None`` when
+        *max_steps* ran out. Call ``run`` again with the final state and the user's
+        next message to continue.
     """
     state = initial_state(state_schema, state)
-    observation = "none"
     schema = derive_schema(state_schema)
+    last_action = None  # the model never sees its own previous action otherwise
     for t in range(max_steps):
         prompt = render_template(
-            path="src/markov_agent/prompt_template.jinja",
+            path=PROMPT_TEMPLATE,
             instructions=instructions,
             request=request,
             state=json.dumps(state, separators=(",", ":")),
             observation=observation,
+            last_action=last_action,
             t=t,
         )
         response = complete(
-            model=model,
-            prompt=prompt,
-            output_schema=schema,
-            thinking_effort="high",
+            model=model, prompt=prompt, output_schema=schema, thinking_effort="high"
         )
         assert response.output is not None
         step = response.output.model_dump()
         patch = step["patch"]
         state = update_state(state, patch)
+        replied = step["kind"] == "reply"
         yield StepEvent(
             t=t,
             state=state,
             patch=patch,
-            action=step["action"],
+            action=None if replied else step["content"],
+            reply=step["content"] if replied else None,
             observation=observation,
         )
-        if step["action"] is None:  # no action left to take = done
+        if replied:  # turn handed back to the user
             break
-        observation = yolo_bash(step["action"])
+        last_action = step["content"]
+        observation = yolo_bash(last_action)

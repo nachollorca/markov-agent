@@ -1,14 +1,11 @@
 """Domain definition for a small coding agent on top of `skill_state.run`."""
 
-import json
-import os
-
 from pydantic import BaseModel, Field
 
-from .skill_state import run
+DEFAULT_MODEL = "mistral:mistral-large-4"
 
 INSTRUCTIONS = """\
-You are a coding agent: you edit files in a project and prove the change works.
+You are a coding agent: you search and edit files in a project, and prove the change works.
 
 - Look before you change: read the relevant files (ls, grep, sed -n) before editing.
 - Read narrowly: grep / sed -n over whole files, the output is the observation you pay for.
@@ -21,11 +18,6 @@ class CodingAgentState(BaseModel):
     """State of the coding agent."""
 
     task: str = Field(description="The user's goal, restated in your words.")
-    working_dir: str = Field(
-        description="Absolute path of the project directory. "
-        "Each command runs in a fresh shell, so `cd` never persists: "
-        "use absolute paths, or prefix the action commands with `cd ` and this field's value."
-    )
     plan: str = Field(
         description="Remaining steps, next first. "
         "A markdown task list: one `- [ ]` item per step, `- [X]` when done.",
@@ -41,38 +33,3 @@ class CodingAgentState(BaseModel):
     verification: str = Field(
         description="Output of the run that proves the task is done.",
     )
-    result: str = Field(description="One-paragraph summary for the user, written when finishing.")
-
-
-if __name__ == "__main__":
-    import argparse
-
-    if os.getenv("LMDK_TELEMETRY"):
-        import logfire
-
-        logfire.configure(
-            token=os.environ["LOGFIRE_TOKEN"],
-            service_name="skill-state-coding-agent",
-            scrubbing=False,
-            send_to_logfire=True,
-        )
-
-    parser = argparse.ArgumentParser(description="Run the coding agent.")
-    parser.add_argument("request", help="The user's request.")
-    parser.add_argument(
-        "--model", default="mistral:mistral-medium-latest", help="Language model to use."
-    )
-    parser.add_argument("--working-dir", default=os.getcwd(), help="Project directory.")
-    args = parser.parse_args()
-
-    with logfire.span("skill_state.run {task}", task=args.request):
-        final_state: dict = {}
-        for event in run(
-            model=args.model,
-            instructions=INSTRUCTIONS,
-            state_schema=CodingAgentState,
-            request=args.request,
-            state={"working_dir": str(args.working_dir)},
-        ):
-            final_state = event.state
-    print(json.dumps(final_state, indent=2))
