@@ -80,31 +80,15 @@ def test_initial_state_seeds_unset_and_defaults():
     assert initial_state(S, {"required": 1}) == {"required": 1, "optional": "d"}
 
 
-def test_derive_schema_wraps_patch_and_action():
+def test_step_schema_puts_the_patch_before_one_action_or_reply():
     class S(BaseModel):
         x: int
 
     step_schema = derive_schema(S)
-    assert "patch" in step_schema.model_fields
-    assert "action" in step_schema.model_fields
-    assert "reply" in step_schema.model_fields
-
-
-def test_step_needs_exactly_one_of_action_and_reply():
-    class S(BaseModel):
-        x: int
-
-    step_schema = derive_schema(S)
-    assert (
-        step_schema.model_validate({"patch": {}, "reply": "which file?"}).model_dump()["action"]
-        == ""
-    )
-    # the strict provider schema marks both required, so "unchanged" lands in the empty one
-    assert step_schema.model_validate({"patch": {}, "action": "ls", "reply": "unchanged"})
-    with pytest.raises(ValidationError, match="exactly one"):
-        step_schema.model_validate({"patch": {}, "action": "ls", "reply": "done"})
-    with pytest.raises(ValidationError, match="exactly one"):
-        step_schema.model_validate({"patch": {}})
+    assert list(step_schema.model_fields) == ["patch", "kind", "content"]
+    assert step_schema.model_validate({"patch": {}, "kind": "reply", "content": "which file?"})
+    with pytest.raises(ValidationError):
+        step_schema.model_validate({"patch": {}, "kind": "unchanged", "content": "ls"})
 
 
 def test_non_dict_patch_replaces_dict_value():
@@ -122,7 +106,8 @@ class FakeStep:
     reply: str | None = None
 
     def model_dump(self):
-        return {"patch": self.patch, "action": self.action, "reply": self.reply}
+        kind = "reply" if self.reply else "action"
+        return {"patch": self.patch, "kind": kind, "content": self.reply or self.action}
 
 
 def _fake_run(monkeypatch, steps):

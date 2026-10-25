@@ -19,10 +19,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from lmdk import complete, render_template
-from pydantic import BaseModel, Field, create_model, model_validator
+from pydantic import BaseModel, Field, create_model
 
 PROMPT_TEMPLATE = Path(__file__).parent / "prompt_template.jinja"  # ships with the package
-_PATCH_KEYWORDS = ("unchanged", "unset")  # state-patch markers, never a real action or reply
 BASH_TIMEOUT = 100  # seconds to wait for the bash
 MAX_BASH_OUTPUT = 100_000  # maximum chars of observation shown to the model
 
@@ -68,40 +67,34 @@ def derive_patch_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
     return create_model(f"Patch_{state_schema.__name__}", **fields)
 
 
-class _Step(BaseModel):
-    """One step of the loop: mutate the state, then either act or hand the turn back."""
-
-    action: str = Field(
-        default="",
-        description="A shell command to run now. Its output becomes the next observation. "
-        "Fill it when the step is yours to execute, and leave `reply` empty.",
-    )
-    reply: str = Field(
-        default="",
-        description="Text for the user: the result, a question, or a blocker. Their answer "
-        "becomes the next observation. Fill it when only they can decide or when the task is "
-        "done, and leave `action` empty.",
-    )
-
-    @model_validator(mode="after")
-    def _exactly_one(self) -> "_Step":
-        # The patch keyword sometimes lands in the idle field instead of ""
-        self.action = "" if self.action in _PATCH_KEYWORDS else self.action
-        self.reply = "" if self.reply in _PATCH_KEYWORDS else self.reply
-        if bool(self.action) == bool(self.reply):
-            raise ValueError("fill exactly one of 'action' or 'reply', leave the other empty")
-        return self
-
-
 def derive_schema(state_schema: type[BaseModel]) -> type[BaseModel]:
-    """Combine the patch schema with the action/reply fields the model answers with."""
-    patch_schema = derive_patch_schema(state_schema)
+    """Combine the patch schema with the action-or-reply decision the model answers with.
+
+    The patch comes first so the model records what it learned before deciding what to do.
+    The decision is one `kind` plus one `content`, so strict decoding can only produce exactly
+    one of action or reply (two optional fields got the patch's "unchanged" or both filled).
+    """
     return create_model(
         f"Step{state_schema.__name__}",
-        __base__=_Step,
+        __doc__="One step of the loop: mutate the state, then either act or hand the turn back.",
         patch=(
-            patch_schema,
-            Field(..., description="State changes only, never `action` or `reply`."),
+            derive_patch_schema(state_schema),
+            Field(description="State changes only, never `kind` or `content`."),
+        ),
+        kind=(
+            Literal["action", "reply"],
+            Field(
+                description="`action`: run a shell command yourself, when the step is yours to "
+                "execute. `reply`: hand the turn to the user, with the result, a question or a "
+                "blocker, when only they can decide or when the task is done."
+            ),
+        ),
+        content=(
+            str,
+            Field(
+                description="The shell command if `kind` is action, the text for the user if "
+                "reply. Its output, or the user's answer, becomes the next observation."
+            ),
         ),
     )
 
@@ -150,7 +143,7 @@ def run(
     Yields:
         One ``StepEvent`` per step, carrying the post-patch state, the patch itself,
         the action proposed and the observation it was conditioned on. The final
-        event carries the ``reply`` handed back to the user, or ``action=None`` when
+        event carries the ``reply`` handed back to the user, or ``reply=None`` when
         *max_steps* ran out. Call ``run`` again with the final state and the user's
         next message to continue.
     """
@@ -172,14 +165,15 @@ def run(
         step = response.output.model_dump()
         patch = step["patch"]
         state = update_state(state, patch)
+        replied = step["kind"] == "reply"
         yield StepEvent(
             t=t,
             state=state,
             patch=patch,
-            action=step["action"] or None,
-            reply=step["reply"] or None,
+            action=None if replied else step["content"],
+            reply=step["content"] if replied else None,
             observation=observation,
         )
-        if step["reply"]:  # turn handed back to the user
+        if replied:  # turn handed back to the user
             break
-        observation = yolo_bash(step["action"])
+        observation = yolo_bash(step["content"])
