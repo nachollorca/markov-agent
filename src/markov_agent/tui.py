@@ -12,6 +12,7 @@ import json
 import os
 from typing import Any
 
+from lmdk import CompletionObserver, observe
 from pydantic import BaseModel
 from rich.text import Text
 from textual import work
@@ -32,6 +33,18 @@ def _lines(value: Any) -> list[str]:
     if value == "unset":
         return []
     return (value if isinstance(value, str) else json.dumps(value, indent=2)).splitlines()
+
+
+def _count(tokens: int | None) -> str:
+    return "?" if tokens is None else f"{tokens / 1000:.1f}k" if tokens >= 1000 else str(tokens)
+
+
+def step_tokens(obs: CompletionObserver) -> tuple[int | None, int | None]:
+    """Prompt and output tokens of the last completion: the step `run` just yielded."""
+    if not obs.records:
+        return None, None
+    response = obs.records[-1].response
+    return response.input_tokens, response.output_tokens
 
 
 def field_diff(old: Any, new: Any) -> Text:
@@ -82,7 +95,8 @@ class MarkovApp(App):
         self.state = initial_state(state_schema, state)
         self.request = ""
         self.turn = 0
-        self.steps: list[tuple[int, dict, StepEvent]] = []  # (turn, state before the step, step)
+        # (turn, state before the step, step, prompt tokens, output tokens)
+        self.steps: list[tuple[int, dict, StepEvent, int | None, int | None]] = []
         self.selected = -1  # selected step; following live while it is the last one
         self.status = "type your request below"
 
@@ -140,27 +154,31 @@ class MarkovApp(App):
         worker = get_current_worker()
         status = "step limit reached, reply to continue"
         try:
-            for event in run(
-                model=self.model,
-                instructions=self.instructions,
-                request=self.request,
-                state_schema=self.state_schema,
-                state=self.state,
-                observation=observation,
-            ):
-                if worker.is_cancelled:  # app is quitting
-                    return
-                self.call_from_thread(self._add_step, event)
-                if event.reply:
-                    status = "your turn"
+            # contextvars-scoped, so the block must wrap the loop in this very thread
+            with observe() as obs:
+                for event in run(
+                    model=self.model,
+                    instructions=self.instructions,
+                    request=self.request,
+                    state_schema=self.state_schema,
+                    state=self.state,
+                    observation=observation,
+                ):
+                    if worker.is_cancelled:  # app is quitting
+                        return
+                    self.call_from_thread(self._add_step, event, *step_tokens(obs))
+                    if event.reply:
+                        status = "your turn"
         except Exception as error:  # keep the session: the state survives, the user can retry
             status = f"error: {error}"
         if not worker.is_cancelled:
             self.call_from_thread(self._set_busy, status, busy=False)
 
-    def _add_step(self, event: StepEvent) -> None:
+    def _add_step(
+        self, event: StepEvent, prompt_tokens: int | None = None, output_tokens: int | None = None
+    ) -> None:
         following = self.selected == len(self.steps) - 1
-        self.steps.append((self.turn, self.state, event))
+        self.steps.append((self.turn, self.state, event, prompt_tokens, output_tokens))
         self.state = event.state
         if following:
             self.selected = len(self.steps) - 1
@@ -181,7 +199,7 @@ class MarkovApp(App):
             self._show_step()
 
     def _show_step(self) -> None:
-        _, before, event = self.steps[self.selected]
+        _, before, event, _, _ = self.steps[self.selected]
         t, t1 = str(event.t).translate(_SUB), str(event.t + 1).translate(_SUB)
         self._show_state(before, event.state, f"STATE Σ{t} → Σ{t1}")
         # Oₜ is the output of the previous step's action, or the user's message at a turn start
@@ -211,16 +229,32 @@ class MarkovApp(App):
             value = field_diff(old, new) if changed else Text("\n".join(_lines(new)), "dim")
             self.query_one(f"#value-{name}", Static).update(value)
 
-    def _show_timeline(self) -> None:
+    def _step_glyphs(self) -> Text:
+        """One glyph per step, with a bar where a new turn starts."""
         # shortcut: one glyph per step wraps after ~3 lines of steps, upgrade to a scrolling strip
         line = Text()
-        for i, (_, _, event) in enumerate(self.steps):
+        for i, (_, _, event, _, _) in enumerate(self.steps):
             if event.t == 0 and i:
                 line.append("│", "dim")
             line.append("◉" if i == self.selected else "○", "bold" if i == self.selected else "dim")
+        return line
+
+    def _turn_total(self, turn: int) -> str:
+        """Cumulative tokens of *turn*: flat step counts mean the prompt is not growing."""
+        steps = [s for s in self.steps if s[0] == turn]
+        return (
+            f" · turn {_count(sum(s[3] or 0 for s in steps))} in / "
+            f"{_count(sum(s[4] or 0 for s in steps))} out"
+        )
+
+    def _show_timeline(self) -> None:
+        line = self._step_glyphs()
         if self.steps:
-            turn, _, event = self.steps[self.selected]
+            turn, _, event, prompt_tokens, output_tokens = self.steps[self.selected]
             line.append(f"  turn {turn} · step {event.t}")
+            if prompt_tokens is not None:
+                line.append(f" · {_count(prompt_tokens)} in / {_count(output_tokens)} out")
+                line.append(self._turn_total(turn), "dim")
         line.append(f"   {self.status}", "italic")
         self.query_one("#timeline", Static).update(line)
 
