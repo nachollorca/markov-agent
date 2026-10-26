@@ -1,7 +1,12 @@
 import asyncio
+import json
 
+import lmdk.completion
+from lmdk.datatypes import RawResponse
+from lmdk.provider import Provider
 from pydantic import BaseModel
-from textual.widgets import Collapsible, TextArea
+from rich.text import Text
+from textual.widgets import Collapsible, Static, TextArea
 
 from markov_agent import tui
 from markov_agent.skill_state import StepEvent
@@ -91,5 +96,51 @@ def test_prompt_wraps_grows_and_keeps_newlines(monkeypatch):
             box.text = "word " * 200
             await pilot.pause()
             assert box.size.height == 5  # grows up to 5 text lines, then scrolls
+
+    asyncio.run(scenario())
+
+
+def _timeline(app) -> str:
+    content = app.query_one("#timeline", Static).content
+    assert isinstance(content, Text)
+    return content.plain
+
+
+class FakeProvider(Provider):
+    """One action then one reply, reporting fixed token usage on every call."""
+
+    calls = 0
+
+    @classmethod
+    def _build_auth_headers(cls, credentials):
+        return {}
+
+    @classmethod
+    def _send_completion_request(cls, request, credentials):
+        cls.calls += 1
+        reply = cls.calls % 2 == 0
+        step = {"patch": {}, "kind": "reply" if reply else "action", "content": "done"}
+        return RawResponse(
+            content=json.dumps(step), input_tokens=1000 + cls.calls, output_tokens=10 * cls.calls
+        )
+
+
+def test_prompt_tokens_per_step_reach_the_ui(monkeypatch):
+    FakeProvider.calls = 0
+    monkeypatch.setattr(lmdk.completion, "resolve_model", lambda model: ("fake", "m", FakeProvider))
+
+    async def scenario():
+        app = tui.MarkovApp("fake:model", "be good", State)
+        async with app.run_test() as pilot:
+            app.query_one(TextArea).text = "do it"
+            await pilot.press("enter")
+            await app.workers.wait_for_complete()
+            await pilot.pause()
+            assert [(s[3], s[4]) for s in app.steps] == [(1001, 10), (1002, 20)]
+            assert "1.0k in / 20 out" in _timeline(app)
+            await pilot.press("pageup")
+            timeline = _timeline(app)
+            assert "1.0k in / 10 out" in timeline  # that step's own counts
+            assert "2.0k in / 30 out" in timeline  # cumulative turn total
 
     asyncio.run(scenario())
