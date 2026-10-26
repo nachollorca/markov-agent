@@ -18,7 +18,7 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Collapsible, Footer, Header, Input, Static
+from textual.widgets import Collapsible, Footer, Header, Static, TextArea
 from textual.worker import get_current_worker
 
 from .agent import DEFAULT_MODEL, INSTRUCTIONS, CodingAgentState
@@ -56,12 +56,16 @@ class MarkovApp(App):
     Collapsible Contents { padding-top: 0; }
     Collapsible.patched { border-left: thick $warning; }
     #timeline { height: auto; max-height: 3; padding: 0 1; }
-    Input { margin-bottom: 1; }
+    TextArea { height: auto; max-height: 7; margin-bottom: 1; }  /* 5 text lines + 2 border rows */
     """
     BINDINGS = [  # noqa: RUF012 (textual's own convention)
-        # priority: pageup/pagedown must scrub even while typing in the input
+        # priority: pageup/pagedown must scrub even while typing in the prompt
         Binding("pageup", "scrub(-1)", "Previous step", priority=True),
         Binding("pagedown", "scrub(1)", "Next step", priority=True),
+        # priority: TextArea would otherwise swallow enter and insert a newline
+        Binding("enter", "submit", "Send", priority=True),
+        # shift+enter, or ctrl+j where the terminal cannot tell the two apart
+        Binding("shift+enter,ctrl+j", "newline", "New line", show=False),
     ]
 
     def __init__(
@@ -100,7 +104,7 @@ class MarkovApp(App):
                 with VerticalScroll(id="output"):
                     yield Static(id="out", markup=False)
         yield Static(id="timeline")
-        yield Input(placeholder="Your request…")
+        yield TextArea(placeholder="Your request…")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -108,22 +112,27 @@ class MarkovApp(App):
         self.title = f"markov · {self.model}"
         self._show_state(self.state, self.state, "STATE Σ₀")
         self._show_timeline()
-        self.query_one(Input).focus()
+        self.query_one(TextArea).focus()
 
-    def on_input_submitted(self, message: Input.Submitted) -> None:
+    def action_submit(self) -> None:
         """The first message is the request, every later one is the next turn's observation."""
-        text = message.value.strip()
+        box = self.query_one(TextArea)
+        text = box.text.strip()
         if not text:
             return
-        message.input.clear()
+        box.clear()
         observation = text
         if not self.request:
             self.request, observation = text, "none"
             self.sub_title = text
-            message.input.placeholder = "Your reply…"
+            box.placeholder = "Your reply…"
         self.turn += 1
         self._set_busy("working…", busy=True)
         self._run_turn(observation)
+
+    def action_newline(self) -> None:
+        """Insert a line break instead of sending."""
+        self.query_one(TextArea).insert("\n")
 
     @work(thread=True, exclusive=True)
     def _run_turn(self, observation: str) -> None:
@@ -159,7 +168,7 @@ class MarkovApp(App):
 
     def _set_busy(self, status: str, busy: bool) -> None:
         self.status = status
-        box = self.query_one(Input)
+        box = self.query_one(TextArea)
         box.disabled = busy
         if not busy:
             box.focus()
