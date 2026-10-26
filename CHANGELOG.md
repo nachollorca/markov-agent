@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v1.5.0 (2026-10-26)
+
+### Features
+
+- **ui**: Growable multi-line prompt with shift+enter newlines
+  ([`09599f7`](https://github.com/nachollorca/markov-agent/commit/09599f77076ae16e0a0e52f0f22f7a328a136715))
+
+### Testing
+
+- **ui**: Cover the multi-line prompt
+  ([`be7546f`](https://github.com/nachollorca/markov-agent/commit/be7546ff33c9ee9555c5917227fdf94f878a381a))
+
+
 ## v1.4.0 (2026-10-25)
 
 ### Bug Fixes
