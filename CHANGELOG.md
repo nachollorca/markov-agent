@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v1.6.0 (2026-10-26)
+
+### Features
+
+- **ui**: Show prompt tokens per step in the timeline
+  ([`979e456`](https://github.com/nachollorca/markov-agent/commit/979e456599389d543feb0d9621d88e71abc9d8be))
+
+
 ## v1.5.0 (2026-10-26)
 
 ### Features
