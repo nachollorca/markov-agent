@@ -8,7 +8,7 @@ import pytest
 from pydantic import BaseModel
 from textual.widgets import Button, Input, Label, Static, TextArea
 
-from markov_agent import auth, tui
+from markov_agent import config, tui
 from markov_agent.skill_state import StepEvent
 
 
@@ -18,13 +18,13 @@ class State(BaseModel):
 
 
 @pytest.fixture
-def auth_file(monkeypatch, tmp_path):
-    """Isolate ~/.markov/auth.json and clear every provider key from the real environment."""
+def config_file(monkeypatch, tmp_path):
+    """Isolate ~/.markov/config.json and clear every provider key from the real environment."""
     for _, names in tui.provider_key_envs():
         for name in names:
             monkeypatch.delenv(name, raising=False)
-    path = tmp_path / "auth.json"
-    monkeypatch.setattr(auth, "AUTH_FILE", path)
+    path = tmp_path / "config.json"
+    monkeypatch.setattr(config, "CONFIG_FILE", path)
     return path
 
 
@@ -47,7 +47,7 @@ def test_resolve_startup_model_precedence():
     assert tui.resolve_startup_model(None, {}) == tui.DEFAULT_MODEL
 
 
-def test_ctrl_s_opens_settings_and_escape_cancels_without_writing(auth_file):
+def test_ctrl_s_opens_settings_and_escape_cancels_without_writing(config_file):
     async def scenario():
         app = tui.MarkovApp("mistral:mistral-large-4", "be good", State)
         async with app.run_test() as pilot:
@@ -64,12 +64,12 @@ def test_ctrl_s_opens_settings_and_escape_cancels_without_writing(auth_file):
             await pilot.pause()
             assert not isinstance(app.screen, tui.SettingsScreen)
             assert app.model == "mistral:mistral-large-4"
-            assert not auth_file.exists()  # cancel wrote nothing
+            assert not config_file.exists()  # cancel wrote nothing
 
     asyncio.run(scenario())
 
 
-def test_save_persists_and_applies_model_and_keys(auth_file):
+def test_save_persists_and_applies_model_and_keys(config_file):
     async def scenario():
         app = tui.MarkovApp("mistral:old", "be good", State)
         async with app.run_test() as pilot:
@@ -85,8 +85,8 @@ def test_save_persists_and_applies_model_and_keys(auth_file):
             assert app.title == "markov · anthropic:claude-sonnet-4-5"
             assert os.environ["ANTHROPIC_API_KEY"] == "sk-ant-test-1234"
             assert app.status == "settings saved"
-            assert stat.S_IMODE(auth_file.stat().st_mode) == 0o600
-            data = json.loads(auth_file.read_text())
+            assert stat.S_IMODE(config_file.stat().st_mode) == 0o600
+            data = json.loads(config_file.read_text())
             assert data == {
                 "model": "anthropic:claude-sonnet-4-5",
                 "keys": {"ANTHROPIC_API_KEY": "sk-ant-test-1234"},
@@ -95,7 +95,7 @@ def test_save_persists_and_applies_model_and_keys(auth_file):
     asyncio.run(scenario())
 
 
-def test_enter_in_the_dialog_saves(auth_file):
+def test_enter_in_the_dialog_saves(config_file):
     async def scenario():
         app = tui.MarkovApp("mistral:old", "be good", State)
         async with app.run_test() as pilot:
@@ -106,12 +106,12 @@ def test_enter_in_the_dialog_saves(auth_file):
             await pilot.pause()
             assert not isinstance(app.screen, tui.SettingsScreen)
             assert app.model == "openai:gpt-5"
-            assert json.loads(auth_file.read_text())["model"] == "openai:gpt-5"
+            assert json.loads(config_file.read_text())["model"] == "openai:gpt-5"
 
     asyncio.run(scenario())
 
 
-def test_invalid_model_shows_the_error_inline_and_stays_open(auth_file):
+def test_invalid_model_shows_the_error_inline_and_stays_open(config_file):
     async def scenario():
         app = tui.MarkovApp("mistral:old", "be good", State)
         async with app.run_test() as pilot:
@@ -125,7 +125,7 @@ def test_invalid_model_shows_the_error_inline_and_stays_open(auth_file):
             error = screen.query_one("#settings-error", Static)
             assert error.display
             assert "cannot use model" in str(error.render())
-            assert not auth_file.exists()
+            assert not config_file.exists()
             screen.query_one("#model", Input).value = "mistral:mistral-large-4"
             screen.query_one("#save", Button).press()
             await pilot.pause()
@@ -135,10 +135,10 @@ def test_invalid_model_shows_the_error_inline_and_stays_open(auth_file):
     asyncio.run(scenario())
 
 
-def test_existing_keys_shown_masked_with_their_source(monkeypatch, auth_file):
+def test_existing_keys_shown_masked_with_their_source(monkeypatch, config_file):
     monkeypatch.setenv("MISTRAL_API_KEY", "REDACTED")
-    auth_file.write_text(json.dumps({"keys": {"OPENAI_API_KEY": "sk-openai-xyz99999"}}))
-    os.chmod(auth_file, 0o600)
+    config_file.write_text(json.dumps({"keys": {"OPENAI_API_KEY": "sk-openai-xyz99999"}}))
+    os.chmod(config_file, 0o600)
 
     async def scenario():
         app = tui.MarkovApp("mistral:mistral-large-4", "be good", State)
@@ -149,7 +149,7 @@ def test_existing_keys_shown_masked_with_their_source(monkeypatch, auth_file):
             env_label = str(screen.query_one("#keylabel-MISTRAL_API_KEY", Label).render())
             file_label = str(screen.query_one("#keylabel-OPENAI_API_KEY", Label).render())
             assert "RED…CTED (env)" in env_label
-            assert "sk-…9999 (auth.json)" in file_label
+            assert "sk-…9999 (config.json)" in file_label
             # the password inputs stay empty, so no mask is ever stored back on save
             assert screen.query_one("#key-MISTRAL_API_KEY", Input).value == ""
             assert screen.query_one("#key-OPENAI_API_KEY", Input).value == ""
@@ -157,7 +157,7 @@ def test_existing_keys_shown_masked_with_their_source(monkeypatch, auth_file):
     asyncio.run(scenario())
 
 
-def test_ctrl_s_stays_closed_while_a_turn_runs(monkeypatch, auth_file):
+def test_ctrl_s_stays_closed_while_a_turn_runs(monkeypatch, config_file):
     release = threading.Event()
 
     def blocking_run(state, observation, **_):

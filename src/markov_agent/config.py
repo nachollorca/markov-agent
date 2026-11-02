@@ -1,4 +1,4 @@
-"""Persistent settings for markov: the model and the provider API keys in ``~/.markov/auth.json``.
+"""Persistent settings for markov: the model and the provider API keys in ``~/.markov/config.json``.
 
 Schema::
 
@@ -19,15 +19,15 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-AUTH_DIR = Path.home() / ".markov"
-AUTH_FILE = AUTH_DIR / "auth.json"
+CONFIG_DIR = Path.home() / ".markov"
+CONFIG_FILE = CONFIG_DIR / "config.json"
 
 
 def load(path: Path | None = None) -> dict[str, Any]:
     """Read the settings file.
 
     Args:
-        path: File to read; defaults to :data:`AUTH_FILE`.
+        path: File to read; defaults to :data:`CONFIG_FILE`.
 
     Returns:
         The parsed settings (``{"model": ..., "keys": {...}}``), or ``{}`` when the file is missing.
@@ -35,7 +35,12 @@ def load(path: Path | None = None) -> dict[str, Any]:
     Raises:
         ValueError: The file is not valid JSON, not a JSON object, or ``keys`` is malformed.
     """
-    path = Path(path) if path is not None else AUTH_FILE
+    path = Path(path) if path is not None else CONFIG_FILE
+    if not path.exists() and (legacy := path.with_name("auth.json")).exists():
+        # pre-1.7 name; if it cannot be moved, keep reading it where it is
+        with contextlib.suppress(OSError):
+            legacy.replace(path)
+        path = path if path.exists() else legacy
     try:
         raw = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -77,12 +82,12 @@ def save(
         model: New model id, or ``None`` to keep the stored one.
         keys: Env var values that changed. An empty value removes the stored key. Never pass a
             masked or placeholder value back: only real values the user entered.
-        path: File to write; defaults to :data:`AUTH_FILE`.
+        path: File to write; defaults to :data:`CONFIG_FILE`.
 
     Returns:
         The full settings dict now on disk.
     """
-    path = Path(path) if path is not None else AUTH_FILE
+    path = Path(path) if path is not None else CONFIG_FILE
     data: dict[str, Any]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # a loose mode was already reported by load()

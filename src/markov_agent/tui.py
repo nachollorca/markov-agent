@@ -28,7 +28,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, Collapsible, Footer, Header, Input, Label, Static, TextArea
 from textual.worker import get_current_worker
 
-from . import auth
+from . import config
 from .agent import DEFAULT_MODEL, INSTRUCTIONS, CodingAgentState
 from .skill_state import StepEvent, initial_state, run
 
@@ -73,7 +73,7 @@ def key_status(name: str, stored: dict) -> tuple[str | None, str | None]:
         return "env", mask(value)
     value = stored.get("keys", {}).get(name)
     if value:
-        return "auth.json", mask(value)
+        return "config.json", mask(value)
     return None, None
 
 
@@ -95,7 +95,7 @@ def provider_key_envs() -> list[tuple[str, tuple[str, ...]]]:
 
 
 class SettingsScreen(ModalScreen):
-    """Pick the model and enter provider API keys; saved to ``~/.markov/auth.json`` on Save."""
+    """Pick the model and enter provider API keys; saved to ``~/.markov/config.json`` on Save."""
 
     BINDINGS = [Binding("escape", "dismiss", "Close")]  # noqa: RUF012 (textual's own convention)
 
@@ -277,9 +277,9 @@ class MarkovApp(App):
         if self.busy or isinstance(self.screen, SettingsScreen):
             return
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # main() already reported auth.json problems
+            warnings.simplefilter("ignore")  # main() already reported config.json problems
             try:
-                stored = auth.load()
+                stored = config.load()
             except (OSError, ValueError):
                 stored = {}
         self.push_screen(SettingsScreen(self.model, stored), self._apply_settings)
@@ -289,7 +289,7 @@ class MarkovApp(App):
         if not result:
             return  # cancelled
         try:
-            auth.save(model=result["model"], keys=result["keys"])
+            config.save(model=result["model"], keys=result["keys"])
         except OSError as error:  # paths only, never key values
             self.status = f"error saving settings: {error}"
         else:
@@ -414,23 +414,23 @@ class MarkovApp(App):
 
 
 def resolve_startup_model(flag: str | None, settings: dict) -> str:
-    """Model for this run: an explicit ``--model`` flag wins, then auth.json, then the default."""
+    """Model for this run: an explicit ``--model`` flag wins, then config.json, then the default."""
     return flag or settings.get("model") or DEFAULT_MODEL
 
 
 def main() -> None:
     """Entry point of the ``markov`` command."""
     parser = argparse.ArgumentParser(description="Run the coding agent in a terminal UI.")
-    parser.add_argument("--model", default=None, help="Model to use; overrides auth.json.")
+    parser.add_argument("--model", default=None, help="Model to use; overrides config.json.")
     parser.add_argument("--working-dir", default=os.getcwd(), help="Project directory.")
     args = parser.parse_args()
 
     try:
-        settings = auth.load()
-    except (OSError, ValueError) as error:  # corrupt auth.json: say it plainly, keep going
+        settings = config.load()
+    except (OSError, ValueError) as error:  # corrupt config.json: say it plainly, keep going
         print(f"markov: {error}", file=sys.stderr)
         settings = {}
-    auth.apply_to_environ(settings)  # before the first completion; the real env wins
+    config.apply_to_environ(settings)  # before the first completion; the real env wins
     model = resolve_startup_model(args.model, settings)
 
     if os.getenv("LMDK_TELEMETRY"):
