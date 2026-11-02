@@ -148,7 +148,7 @@ def test_existing_keys_shown_masked_with_their_source(monkeypatch, auth_file):
             screen = app.screen
             env_label = str(screen.query_one("#keylabel-MISTRAL_API_KEY", Label).render())
             file_label = str(screen.query_one("#keylabel-OPENAI_API_KEY", Label).render())
-            assert "sk-…1234 (env)" in env_label
+            assert "RED…CTED (env)" in env_label
             assert "sk-…9999 (auth.json)" in file_label
             # the password inputs stay empty, so no mask is ever stored back on save
             assert screen.query_one("#key-MISTRAL_API_KEY", Input).value == ""
