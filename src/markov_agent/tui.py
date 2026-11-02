@@ -23,6 +23,7 @@ from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.command import CommandPalette
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, Collapsible, Footer, Header, Input, Label, Static, TextArea
@@ -246,6 +247,12 @@ class MarkovApp(App):
         self._show_state(self.state, self.state, "STATE Σ₀")
         self._show_timeline()
         self.query_one(TextArea).focus()
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Keep the app's priority bindings from stealing keys from the command palette."""
+        # enter/pageup/pagedown belong to the palette's own input and list
+        palette = isinstance(self.screen, CommandPalette)
+        return not (palette and action in ("submit", "newline", "scrub"))
 
     def action_submit(self) -> None:
         """The first message is the request, every later one is the next turn's observation."""

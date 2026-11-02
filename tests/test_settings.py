@@ -111,6 +111,24 @@ def test_enter_in_the_dialog_saves(config_file):
     asyncio.run(scenario())
 
 
+def test_enter_in_the_command_palette_is_not_stolen_by_submit(config_file):
+    async def scenario():
+        app = tui.MarkovApp("mistral:mistral-large-4", "be good", State)
+        async with app.run_test() as pilot:
+            app.query_one(TextArea).text = "do it"
+            await pilot.press("ctrl+p")
+            await pilot.pause()
+            await pilot.press(*"theme")  # goes to the palette's input, not the prompt
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            # the palette handled enter; the app's priority submit did not fire
+            assert not app.busy and app.turn == 0
+            assert app.query_one(TextArea).text == "do it"
+
+    asyncio.run(scenario())
+
+
 def test_invalid_model_shows_the_error_inline_and_stays_open(config_file):
     async def scenario():
         app = tui.MarkovApp("mistral:old", "be good", State)
