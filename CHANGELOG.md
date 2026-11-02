@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v1.7.0 (2026-11-02)
+
+### Bug Fixes
+
+- **tui**: Let enter select in the command palette
+  ([`d5cd3ac`](https://github.com/nachollorca/markov-agent/commit/d5cd3ac79463b92fd8087a2408949688872c05a4))
+
+### Features
+
+- **tui**: Add settings menu
+  ([`cdf0b60`](https://github.com/nachollorca/markov-agent/commit/cdf0b60bc79d663a4e7f284a74d19b4596c3ee73))
+
+- **tui**: Persist the theme picked in the command palette
+  ([`5af97de`](https://github.com/nachollorca/markov-agent/commit/5af97dee5f955bbe6cb905e96fe3dae6c8f4db75))
+
+### Refactoring
+
+- **config**: Rename auth.py to config.py and auth.json to config.json
+  ([`a1854cd`](https://github.com/nachollorca/markov-agent/commit/a1854cdcdbfd6123057f588451c22e58af1d691c))
+
+### Testing
+
+- **settings**: Replace string falsely detected by giitleaks
+  ([`3373ab7`](https://github.com/nachollorca/markov-agent/commit/3373ab7d0d36b351b3debfe4425d65ef637c6454))
+
+
 ## v1.6.0 (2026-10-26)
 
 ### Features
