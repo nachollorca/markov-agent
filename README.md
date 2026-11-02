@@ -8,6 +8,10 @@ A coding agent following the principles defined in the [SKILL.state](docs/paper.
 
 Hence, the context given to the agent is modeled similar to a Markov process: the next state depends only on the current one and the (observed result of the) action taken.
 
+
+https://github.com/user-attachments/assets/b9b60696-1d42-427e-99c5-f82d0a751f67
+
+
 ## Overview
 
 Although the paper specifies tasks like inventory management or CTF, I wanted to use it for a coding agent and test it in tasks I normally throw at [Pi](https://github.com/earendil-works/pi) and see what happens.
