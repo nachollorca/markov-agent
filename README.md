@@ -49,6 +49,12 @@ See [justfile](justfile) for pre-built commands used along pre-commit hooks and 
 
 _Made with [`mold`](https://github.com/nachollorca/mold) template_
 
+## Use of AI in this repo
+
+The paper implmentation in [skill_state.py](src/markov_agent/skill_state.py) and the coding agent use case in [agent.py](src/markov_agent/agent.py) I developed by hand with lots of love and care.
+
+The whole [tui.py](src/markov_agent/tui.py) I really cannot care about, nor do I have enough knowledge of textual. So claude-opus-5-5 planned it, mistral-large-4 implemented it, and I just reviewed the code diagonally and checked that the TUI makes sense.
+
 ## References
 
 ```
