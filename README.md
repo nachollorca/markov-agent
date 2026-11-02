@@ -31,6 +31,27 @@ uv tool install markov-agent
 markov  # --model defaults to mistral:mistral-large-4
 ```
 
+### Settings
+
+Press `ctrl+s` in the TUI to open the settings screen: pick the model (`provider:model-id`, validated
+through `lmdk`) and enter provider API keys. `escape` closes without writing; the screen is unavailable
+while a turn is running.
+
+Saved settings live in `~/.markov/config.json` (an older `~/.markov/auth.json` is renamed on first run):
+
+```json
+{ "model": "mistral:mistral-large-4", "keys": { "MISTRAL_API_KEY": "..." }, "theme": "textual-dark" }
+```
+
+The file is written atomically with mode `0600` inside a `0700` directory, and its keys are merged into
+the environment at startup — a variable already set in the real environment always wins over the file,
+so `MISTRAL_API_KEY=... markov` keeps working. Key values are never printed or logged; the settings
+screen only shows them masked (`sk-…abcd`) next to their source (`env` or `config.json`). The `--model`
+flag still works and takes precedence over the file for that run.
+
+`ctrl+p` opens Textual's command palette. A theme picked there is written to `config.json`, so the next
+run starts with it.
+
 ### As a library
 
 [`skill_state.py`](src/markov_agent/skill_state.py) is the whole implementation of the paper. Define your
