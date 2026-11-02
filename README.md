@@ -4,27 +4,32 @@ A coding agent following the principles defined in the [SKILL.state](docs/paper.
 
 > Runtime architecture that replaces append-only conversational history with an explicit, mutable execution state. At each execution step, the model receives only the immutable skill specification, the current structured execution state, and the latest observation. Intermediate reasoning is discarded immediately after **producing a validated state update**, preventing prompt growth with execution history.
 
+The agent is responsible of updating its own state after each observation.
+
 ![Figure](docs/figure.png)
 
 Hence, the context given to the agent is modeled similar to a Markov process: the next state depends only on the current one and the (observed result of the) action taken.
 
+I did a little TUI to visualize how the agent works, mostly the diffs in every state patch. In the demo below:
+
+1. I enter a task
+2. The agent updates the state (records the task, formulates a plan, see left panel) and takes the first action (`ls -la`, see bottom-right panel)
+3. It receives the resulting observation (top right panel), updates the state (plan and facts, left panel) and takes the next action (again, bottom-right panel)
+4. It repeats the cycle until the request is satisfied, then replies.
+
+Notice how the input tokens do almost not grow, since reasoning and observations are discarded after the agent embeds them in the state.
 
 https://github.com/user-attachments/assets/b9b60696-1d42-427e-99c5-f82d0a751f67
-
 
 ## Overview
 
 Although the paper specifies tasks like inventory management or CTF, I wanted to use it for a coding agent and test it in tasks I normally throw at [Pi](https://github.com/earendil-works/pi) and see what happens.
 
-The action space is: **bash**. Nothing more and nothing less. While most coding agents have some specially guardrailed tools (`read`, `patch`, etc.), [there is research proving that powerful LMs can do better without](https://arxiv.org/pdf/2609.20804):
+The action space is: **bash**. While most coding agents have some specially guardrailed tools (`read`, `patch`, etc.), [there is research proving that powerful LMs can do better without](https://arxiv.org/pdf/2609.20804):
 
 > Predefined tools improve performance for models with weaker bash proficiency, whereas bash-capable models can operate effectively with a bash-only interface and achieve substantially lower cost, especially on command-line-centric tasks.
 
-## Installation
-
-```bash
-uv add markov-agent
-```
+Then, the agent can also choose to act upon the user (just another part of the environment) to ask for clarification. User feedback is then shown to the agent as Oₜ.
 
 ## Usage
 
@@ -37,13 +42,15 @@ markov  # --model defaults to mistral:mistral-large-4
 
 ### As a library
 
-[`skill_state.py`](src/markov_agent/skill_state.py) is the whole implementation of the paper. Define your
-state as a pydantic model plus an immutable instruction block, then consume the `StepEvent`s of
-`run()`. [`agent.py`](src/markov_agent/agent.py) is a small coding-agent domain to copy from.
+[`skill_state.py`](src/markov_agent/skill_state.py) is the whole implementation of the paper. Define your state as a pydantic model plus an immutable instruction block, then consume the `StepEvent`s of `run()`. [`agent.py`](src/markov_agent/agent.py) is a small coding-agent domain to copy from.
 
-If you only want the core and not the terminal UI (nor its `textual` dependency), copy
-`skill_state.py` and `prompt_template.jinja` into your project: they import nothing else from this
-package, and `lmdk` + `jinja2` are their only requirements.
+If you only want the core and not the terminal UI (nor its `textual` dependency), copy `skill_state.py` and `prompt_template.jinja` into your project: they import nothing else from this package, and `lmdk` + `jinja2` are their only requirements.
+
+## Use of AI in this repo
+
+The paper implementation in [skill_state.py](src/markov_agent/skill_state.py) and the coding agent use case in [agent.py](src/markov_agent/agent.py) I developed by hand with lots of love and care.
+
+The whole [tui.py](src/markov_agent/tui.py) I really cannot care about, nor do I have enough knowledge of textual. So claude-opus-5-5 planned it, mistral-large-4 implemented it, and I just reviewed the code diagonally and checked that the TUI makes sense.
 
 ## Development
 
@@ -52,12 +59,6 @@ This project uses [uv](https://docs.astral.sh/uv/), [just](https://just.systems/
 See [justfile](justfile) for pre-built commands used along pre-commit hooks and CI.
 
 _Made with [`mold`](https://github.com/nachollorca/mold) template_
-
-## Use of AI in this repo
-
-The paper implmentation in [skill_state.py](src/markov_agent/skill_state.py) and the coding agent use case in [agent.py](src/markov_agent/agent.py) I developed by hand with lots of love and care.
-
-The whole [tui.py](src/markov_agent/tui.py) I really cannot care about, nor do I have enough knowledge of textual. So claude-opus-5-5 planned it, mistral-large-4 implemented it, and I just reviewed the code diagonally and checked that the TUI makes sense.
 
 ## References
 
