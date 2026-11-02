@@ -129,6 +129,42 @@ def test_enter_in_the_command_palette_is_not_stolen_by_submit(config_file):
     asyncio.run(scenario())
 
 
+def test_theme_is_saved_and_restored(config_file):
+    async def scenario():
+        app = tui.MarkovApp("mistral:mistral-large-4", "be good", State)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.theme = "textual-light"
+            await pilot.pause()
+        stored = json.loads(config_file.read_text())["theme"]
+        assert stored == "textual-light"
+
+        restored = tui.MarkovApp("mistral:mistral-large-4", "be good", State, theme=stored)
+        async with restored.run_test() as pilot:
+            await pilot.pause()
+            assert restored.theme == "textual-light"
+
+    asyncio.run(scenario())
+
+
+def test_unknown_stored_theme_is_ignored(config_file):
+    async def scenario():
+        app = tui.MarkovApp("mistral:mistral-large-4", "be good", State, theme="nope")
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            assert app.theme == "textual-dark"
+
+    asyncio.run(scenario())
+
+
+def test_legacy_auth_json_is_migrated(monkeypatch, tmp_path, config_file):
+    legacy = tmp_path / "auth.json"
+    legacy.write_text(json.dumps({"model": "file:model"}))
+    os.chmod(legacy, 0o600)
+    assert config.load()["model"] == "file:model"
+    assert config_file.exists() and not legacy.exists()
+
+
 def test_invalid_model_shows_the_error_inline_and_stays_open(config_file):
     async def scenario():
         app = tui.MarkovApp("mistral:old", "be good", State)

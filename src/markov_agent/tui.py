@@ -206,9 +206,11 @@ class MarkovApp(App):
         instructions: str,
         state_schema: type[BaseModel],
         state: dict | None = None,
+        theme: str | None = None,
     ):
         super().__init__()
         self.model = model
+        self.stored_theme = theme  # from config.json; saved on every change after startup
         self.instructions = instructions
         self.state_schema = state_schema
         self.state = initial_state(state_schema, state)
@@ -243,6 +245,8 @@ class MarkovApp(App):
 
     def on_mount(self) -> None:
         """Show the initial state Σ₀ before anything ran."""
+        if self.stored_theme in self.available_themes:
+            self.theme = self.stored_theme
         self.title = f"markov · {self.model}"
         self._show_state(self.state, self.state, "STATE Σ₀")
         self._show_timeline()
@@ -253,6 +257,17 @@ class MarkovApp(App):
         # enter/pageup/pagedown belong to the palette's own input and list
         palette = isinstance(self.screen, CommandPalette)
         return not (palette and action in ("submit", "newline", "scrub"))
+
+    def watch_theme(self, theme: str) -> None:
+        """Persist a theme picked from the command palette, so the next run starts with it."""
+        if theme == self.stored_theme:
+            return  # startup restore, not a choice by the user
+        try:
+            config.save(theme=theme)
+        except OSError as error:
+            self.status = f"error saving theme: {error}"
+            return
+        self.stored_theme = theme
 
     def action_submit(self) -> None:
         """The first message is the request, every later one is the next turn's observation."""
@@ -452,4 +467,4 @@ def main() -> None:
         )
 
     os.chdir(args.working_dir)  # commands run in a shell that inherits this cwd
-    MarkovApp(model, INSTRUCTIONS, CodingAgentState).run()
+    MarkovApp(model, INSTRUCTIONS, CodingAgentState, theme=settings.get("theme")).run()

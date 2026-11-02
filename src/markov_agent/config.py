@@ -1,8 +1,12 @@
-"""Persistent settings for markov: the model and the provider API keys in ``~/.markov/config.json``.
+"""Persistent settings for markov: model, provider API keys and theme in ``~/.markov/config.json``.
 
 Schema::
 
-    {"model": "mistral:mistral-large-4", "keys": {"MISTRAL_API_KEY": "..."}}
+    {
+        "model": "mistral:mistral-large-4",
+        "keys": {"MISTRAL_API_KEY": "..."},
+        "theme": "textual-dark",
+    }
 
 The file is written atomically (temp file in the same directory + ``os.replace``) with mode ``0600``
 inside a ``0700`` directory. Stored keys are merged into ``os.environ`` at startup, but a variable
@@ -30,7 +34,8 @@ def load(path: Path | None = None) -> dict[str, Any]:
         path: File to read; defaults to :data:`CONFIG_FILE`.
 
     Returns:
-        The parsed settings (``{"model": ..., "keys": {...}}``), or ``{}`` when the file is missing.
+        The parsed settings (``{"model": ..., "keys": {...}, "theme": ...}``), or ``{}`` when the
+        file is missing.
 
     Raises:
         ValueError: The file is not valid JSON, not a JSON object, or ``keys`` is malformed.
@@ -60,6 +65,8 @@ def load(path: Path | None = None) -> dict[str, Any]:
         raise ValueError(f"{path} must contain a JSON object, got {type(data).__name__}")
     if "model" in data and not isinstance(data["model"], str):
         raise ValueError(f'{path}: "model" must be a string')
+    if "theme" in data and not isinstance(data["theme"], str):
+        raise ValueError(f'{path}: "theme" must be a string')
     keys = data.get("keys", {})
     if not isinstance(keys, dict):
         raise ValueError(f'{path}: "keys" must be a JSON object')
@@ -74,7 +81,10 @@ def apply_to_environ(settings: dict[str, Any]) -> None:
 
 
 def save(
-    model: str | None = None, keys: dict[str, str] | None = None, path: Path | None = None
+    model: str | None = None,
+    keys: dict[str, str] | None = None,
+    theme: str | None = None,
+    path: Path | None = None,
 ) -> dict[str, Any]:
     """Update the settings file, changing only what was passed.
 
@@ -82,6 +92,7 @@ def save(
         model: New model id, or ``None`` to keep the stored one.
         keys: Env var values that changed. An empty value removes the stored key. Never pass a
             masked or placeholder value back: only real values the user entered.
+        theme: Textual theme name, or ``None`` to keep the stored one.
         path: File to write; defaults to :data:`CONFIG_FILE`.
 
     Returns:
@@ -97,6 +108,8 @@ def save(
             data = {}  # unreadable or corrupt: start over, the write below fixes it
     if model:
         data["model"] = model
+    if theme:
+        data["theme"] = theme
     stored = dict(data.get("keys", {}))
     for name, value in (keys or {}).items():
         if value:

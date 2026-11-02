@@ -49,6 +49,9 @@ so `MISTRAL_API_KEY=... markov` keeps working. Key values are never printed or l
 screen only shows them masked (`sk-…abcd`) next to their source (`env` or `config.json`). The `--model`
 flag still works and takes precedence over the file for that run.
 
+`ctrl+p` opens Textual's command palette. A theme picked there is written to `config.json`, so the next
+run starts with it.
+
 ### As a library
 
 [`skill_state.py`](src/markov_agent/skill_state.py) is the whole implementation of the paper. Define your
